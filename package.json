@@ -5,14 +5,12 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "deploy": "node deploy-commands.js"
+    "deploy": "node index.js"
   },
   "dependencies": {
     "discord.js": "^14.22.1",
     "dotenv": "^16.6.1",
     "firebase-admin": "^13.5.0",
-    "mongodb": "^6.8.0",
-    "mongoose": "^8.18.3",
     "node-fetch": "^3.3.2",
     "noblox.js": "^4.15.1"
   }
