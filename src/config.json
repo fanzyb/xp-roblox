@@ -14,6 +14,8 @@
     
   "eventManagerRoles": ["1429805230672969742"],
   "eventLogChannelId": "1429805496482926622",
+    
+  "transcriptLogChannelId": "1432252981633351722",
 
   "rankToRoleMapping": {
     "Climber": "1412761938991251516",
