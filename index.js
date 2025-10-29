@@ -12,8 +12,7 @@ import { data as xpCommand, execute as xpExecute } from "./src/commands/xp.js";
 import { data as expoCommand, execute as expoExecute } from "./src/commands/expo.js";
 import { data as rankCommand, execute as rankExecute } from "./src/commands/rank.js";
 import { data as lbCommand, execute as lbExecute } from "./src/commands/leaderboard.js";
-import { data as summitCommand, execute as summitExecute } from "./src/commands/summit.js";
-import { data as summitdCommand, execute as summitdExecute } from "./src/commands/summitd.js";
+import { data as transcriptCommand, execute as transcriptExecute } from "./src/commands/transcript.js";
 import { data as rewardCommand, execute as rewardExecute } from "./src/commands/reward.js";
 import { data as hofCommand, execute as hofExecute } from "./src/commands/hallOfFame.js";
 import { data as listRewardCommand, execute as listRewardExecute } from "./src/commands/listReward.js";
@@ -109,7 +108,7 @@ client.on("ready", async () => {
     const commands = [
         xpCommand, expoCommand, rankCommand, lbCommand, rewardCommand, 
         hofCommand, listRewardCommand, debugCommand,
-        linkCommand, verifyCommand, xpdCommand, expodCommand, getroleCommand, summitCommand, summitdCommand
+        linkCommand, verifyCommand, xpdCommand, expodCommand, getroleCommand, transcriptCommand
     ];
 
     if (guild) {
@@ -151,8 +150,7 @@ client.on("interactionCreate", async (interaction) => {
             case "xpd": await xpdExecute(interaction); break;
             case "expo": await expoExecute(interaction); break;
             case "expod": await expodExecute(interaction); break;
-            case "summit": await summitExecute(interaction); break;
-            case "summitd": await summitdExecute(interaction); break;
+            case "transcript": await transcriptExecute(interaction); break;
             case "rank": await rankExecute(interaction); break;
             case "getrole": await getroleExecute(interaction);break;
             case "leaderboard": await lbExecute(interaction); break;
