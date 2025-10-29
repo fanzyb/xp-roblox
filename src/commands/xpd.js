@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } from "discord.js";
-import { getRobloxUser, isInRobloxGroup, getLevel, embedColor } from "../utils/helpers.js";
+import { getRobloxUser, isInRobloxGroup, getLevel, embedColor, getRobloxRankName } from "../utils/helpers.js";
 import { findUserByDiscordId, saveUser } from "../db/firestore.js";
 import config from "../config.json" with { type: "json" };
 import { logError } from "../utils/errorLogger.js";
@@ -23,7 +23,6 @@ export const data = new SlashCommandBuilder()
             .addUserOption(opt => opt.setName("member").setDescription("The Discord member to manage").setRequired(true))
             .addIntegerOption(opt => opt.setName("amount").setDescription("XP amount").setRequired(true))
     )
-    // [BARU] Subcommand 'bonus'
     .addSubcommand(sub =>
         sub.setName("bonus").setDescription("Give bonus XP to a linked user (no expedition count)")
             .addUserOption(opt => opt.setName("member").setDescription("The Discord member to manage").setRequired(true))
@@ -43,7 +42,6 @@ export async function execute(interaction) {
         const action = interaction.options.getSubcommand();
         const member = interaction.options.getMember("member");
         const amount = interaction.options.getInteger("amount");
-        // [BARU] Ambil 'reason' dari opsi
         const reason = interaction.options.getString("reason");
 
         const userFromDb = await findUserByDiscordId(member.id);
@@ -59,8 +57,8 @@ export async function execute(interaction) {
 
         let user = userFromDb;
         const oldLevel = getLevel(user.xp).levelName;
+        const oldLevelXp = getLevel(user.xp);
 
-        // [MODIFIKASI] Logika untuk subcommand baru dan lama
         if (action === "add") {
             user.xp += amount;
             user.expeditions = (user.expeditions || 0) + 1;
@@ -70,25 +68,45 @@ export async function execute(interaction) {
         } else if (action === "set") {
             user.xp = amount;
         } else if (action === "bonus") {
-            // Hanya tambah XP
             user.xp += amount;
         }
 
         await saveUser(user);
 
         const newLevel = getLevel(user.xp).levelName;
-        const levelMsg = newLevel !== oldLevel ? ` 🎉 **${robloxData.name} has leveled up to ${newLevel}!**` : "";
+        let levelMsg = newLevel !== oldLevel ? ` 🎉 **${robloxData.name} has leveled up to ${newLevel}!**` : "";
         let responseMessage = `✅ Successfully performed '${action}' action with ${amount} XP for **${robloxData.name}** (linked to <@${member.id}>).${levelMsg}`;
 
-        // [BARU] Pesan balasan khusus untuk 'bonus'
         if (action === "bonus") {
             responseMessage = `✅ Gave **${amount}** bonus XP to **${robloxData.name}** (linked to <@${member.id}>).${levelMsg}`;
             if (reason) responseMessage += `\n*Reason: ${reason}*`;
         }
 
+        // --- PENAMBAHAN FITUR AUTO ROLE ---
+        if (newLevel !== oldLevel) {
+            const robloxRankName = await getRobloxRankName(robloxData.id);
+            const rankMapping = config.rankToRoleMapping || {};
+            const targetRoleId = rankMapping[newLevel];
+
+            if (robloxRankName && targetRoleId) {
+                const targetRole = interaction.guild.roles.cache.get(targetRoleId);
+                if (targetRole) {
+                    const allRankRoleIds = Object.values(rankMapping);
+                    const rolesToRemove = member.roles.cache.filter(role => allRankRoleIds.includes(role.id));
+                    
+                    if (rolesToRemove.size > 0) {
+                        await member.roles.remove(rolesToRemove);
+                    }
+                    
+                    await member.roles.add(targetRole);
+                    responseMessage += `\n👑 Their role has been updated to **${targetRole.name}**!`;
+                }
+            }
+        }
+        // --- AKHIR PENAMBAHAN ---
+
         await interaction.editReply({ content: responseMessage });
 
-        // Kirim log SETELAH pesan sukses
         try {
             const xpLogChannel = interaction.guild.channels.cache.get(config.xpLogChannelId);
             if (xpLogChannel) {
@@ -100,7 +118,6 @@ export async function execute(interaction) {
                     { name: "By", value: interaction.user.tag, inline: true },
                     { name: "New XP", value: user.xp.toString(), inline: true }
                 ];
-                // [BARU] Tambahkan 'reason' ke log jika ada
                 if (reason) {
                     logFields.push({ name: "Reason", value: reason });
                 }
