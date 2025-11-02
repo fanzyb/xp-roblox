@@ -22,6 +22,9 @@ import { data as expodCommand, execute as expodExecute } from "./src/commands/ex
 import { data as linkCommand, execute as linkExecute } from "./src/commands/link.js";
 import { data as verifyCommand, execute as verifyExecute, handleComponent as verifyHandleComponent, handleModalSubmit as verifyHandleModal } from "./src/commands/verify.js";
 import { data as getroleCommand, execute as getroleExecute } from "./src/commands/getrole.js";
+// [TAMBAHAN] Impor command baru
+import { data as syncCommand, execute as syncExecute } from "./src/commands/sync.js";
+import { data as messageCommand, execute as messageExecute, handleModalSubmit as messageHandleModal } from "./src/commands/message.js";
 
 
 dotenv.config();
@@ -71,7 +74,6 @@ async function checkMilestones() {
             .setTitle("🎉 Community Milestone Reached! 🎉")
             .setDescription(`## We've just hit **${nextMilestone.toLocaleString()}** members in our Roblox Group!`)
             .setColor("#1B1464")
-            // [PERBAIKAN] Gunakan '?? null' untuk memastikan nilai null dikirim jika tidak ada ikon
             .setThumbnail(client.guilds.cache.first()?.iconURL() ?? null)
             .addFields({ name: "Thank You!", value: "A huge thank you to every single member for being a part of our community. Let's aim for the next milestone!" })
             .setTimestamp();
@@ -108,7 +110,8 @@ client.on("ready", async () => {
     const commands = [
         xpCommand, expoCommand, rankCommand, lbCommand, rewardCommand, 
         hofCommand, listRewardCommand, debugCommand,
-        linkCommand, verifyCommand, xpdCommand, expodCommand, getroleCommand, transcriptCommand
+        linkCommand, verifyCommand, xpdCommand, expodCommand, getroleCommand, transcriptCommand,
+        syncCommand, messageCommand // Daftarkan command baru
     ];
 
     if (guild) {
@@ -128,16 +131,23 @@ client.on("interactionCreate", async (interaction) => {
     try {
         if (interaction.isStringSelectMenu() || interaction.isButton()) {
             if (interaction.customId.startsWith('verify_')) {
-                return verifyHandleComponent(interaction);
+                // [PERBAIKAN] Tambahkan await
+                return await verifyHandleComponent(interaction);
             }
             if (interaction.customId.startsWith('lb_') || interaction.customId.startsWith('reward_')) {
-                return handleComponentInteraction(interaction);
+                // [PERBAIKAN] Tambahkan await
+                return await handleComponentInteraction(interaction);
             }
         }
 
         if (interaction.isModalSubmit()) {
             if (interaction.customId === 'verify_modal_submit') {
-                return verifyHandleModal(interaction);
+                // [PERBAIKAN] Tambahkan await
+                return await verifyHandleModal(interaction);
+            }
+            if (interaction.customId === 'send_message_modal') {
+                // [PERBAIKAN] Tambahkan await
+                return await messageHandleModal(interaction);
             }
         }
 
@@ -160,6 +170,9 @@ client.on("interactionCreate", async (interaction) => {
             case "debug": await debugExecute(interaction); break;
             case "link": await linkExecute(interaction); break;
             case "verify": await verifyExecute(interaction); break;
+            // Handle eksekusi command baru
+            case "sync": await syncExecute(interaction); break;
+            case "message": await messageExecute(interaction); break;
             default:
                 await interaction.reply({ content: "❌ Unknown command.", ephemeral: true });
                 break;
