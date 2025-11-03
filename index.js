@@ -19,10 +19,10 @@ import { data as listRewardCommand, execute as listRewardExecute } from "./src/c
 import { data as debugCommand, execute as debugExecute } from "./src/commands/debug.js";
 import { data as xpdCommand, execute as xpdExecute } from "./src/commands/xpd.js";
 import { data as expodCommand, execute as expodExecute } from "./src/commands/expod.js";
+import { data as statsCommand, execute as statsExecute } from "./src/commands/stats.js";
 import { data as linkCommand, execute as linkExecute } from "./src/commands/link.js";
 import { data as verifyCommand, execute as verifyExecute, handleComponent as verifyHandleComponent, handleModalSubmit as verifyHandleModal } from "./src/commands/verify.js";
 import { data as getroleCommand, execute as getroleExecute } from "./src/commands/getrole.js";
-// [TAMBAHAN] Impor command baru
 import { data as syncCommand, execute as syncExecute } from "./src/commands/sync.js";
 import { data as messageCommand, execute as messageExecute, handleModalSubmit as messageHandleModal } from "./src/commands/message.js";
 
@@ -111,7 +111,7 @@ client.on("ready", async () => {
         xpCommand, expoCommand, rankCommand, lbCommand, rewardCommand, 
         hofCommand, listRewardCommand, debugCommand,
         linkCommand, verifyCommand, xpdCommand, expodCommand, getroleCommand, transcriptCommand,
-        syncCommand, messageCommand // Daftarkan command baru
+        syncCommand, messageCommand, statsCommand
     ];
 
     if (guild) {
@@ -169,6 +169,7 @@ client.on("interactionCreate", async (interaction) => {
             case "list-reward": await listRewardExecute(interaction); break;
             case "debug": await debugExecute(interaction); break;
             case "link": await linkExecute(interaction); break;
+            case "stats": await statsExecute(interaction); break;
             case "verify": await verifyExecute(interaction); break;
             // Handle eksekusi command baru
             case "sync": await syncExecute(interaction); break;
