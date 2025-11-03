@@ -1,5 +1,11 @@
 import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ButtonBuilder, ButtonStyle } from "discord.js";
-import { getRobloxUser, isInRobloxGroup, performVerification, embedColor } from "../utils/helpers.js";
+import { 
+    getRobloxUser, 
+    isInRobloxGroup, 
+    performVerification, 
+    embedColor, 
+    syncRankRole
+} from "../utils/helpers.js";
 import { findUser, saveUser, findUserByDiscordId } from "../db/firestore.js";
 import config from "../config.json" with { type: "json" };
 import { logError } from "../utils/errorLogger.js";
@@ -136,7 +142,8 @@ export async function handleVerification(interaction, usernameInput, discordId =
 
         let verificationResult;
         try {
-            verificationResult = await performVerification(member, robloxData, config);
+            // Panggil tanpa 'config'
+            verificationResult = await performVerification(member, robloxData); 
         } catch (error) {
             if (error.message === "NOT_IN_GROUP") {
                 const groupURL = `https://www.roblox.com/groups/${config.groupId}`;
@@ -161,11 +168,17 @@ export async function handleVerification(interaction, usernameInput, discordId =
         };
         await saveUser(userData);
 
+        const rankRole = await syncRankRole(member, userData.xp);
+
         let replyMessage = `🎉 **Verification Complete!** Your account has been linked to **${robloxData.displayName} (@${robloxData.name})**.`;
         if (verificationResult.nicknameWarning) {
             replyMessage += `\n\n${verificationResult.nicknameWarning}`;
         } else {
             replyMessage += ` Your nickname has been set to \`${verificationResult.newNickname}\`.`;
+        }
+        
+        if (rankRole) {
+            replyMessage += `\n👑 Your rank role **${rankRole.name}** has been applied!`;
         }
         
         // ... (LOGGING) ...
