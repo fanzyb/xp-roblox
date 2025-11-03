@@ -1,6 +1,13 @@
 import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } from "discord.js";
 // Import dari lokasi yang benar
-import { getRobloxUser, getRobloxAvatar, performVerification, removeVerification, embedColor } from "../utils/helpers.js";
+import { 
+    getRobloxUser, 
+    getRobloxAvatar, 
+    performVerification, 
+    removeVerification, 
+    embedColor,
+    syncRankRole // <-- Tetap di-import untuk /link member
+} from "../utils/helpers.js";
 import { findUser, saveUser, findUserByDiscordId } from "../db/firestore.js";
 import config from "../config.json" with { type: "json" };
 import { generateVerificationPanel } from "./verify.js";
@@ -72,7 +79,8 @@ export async function execute(interaction) {
 
             let verificationResult;
             try {
-                verificationResult = await performVerification(member, robloxData, config);
+                // Panggil tanpa 'config'
+                verificationResult = await performVerification(member, robloxData);
             } catch (error) {
                 if (error.message === "NOT_IN_GROUP") {
                     const groupURL = `https://www.roblox.com/groups/${config.groupId}`;
@@ -91,11 +99,18 @@ export async function execute(interaction) {
                 achievements: existingRobloxLink?.achievements || [],
             };
             await saveUser(userData);
+            
+            // Panggil fungsi sinkronisasi role rank
+            const rankRole = await syncRankRole(member, userData.xp);
 
             let replyMessage = `✅ Successfully linked <@${member.id}> to **${robloxData.name}**.`;
             if (verificationResult.nicknameWarning) {
                 const warning = verificationResult.nicknameWarning.replace("your", "their");
                 replyMessage += `\n\n${warning}`;
+            }
+
+            if (rankRole) {
+                replyMessage += `\n👑 Their rank role **${rankRole.name}** has been applied!`;
             }
 
             sendLog("✅ Manual Verification Log", "#00FF00", [
@@ -108,28 +123,21 @@ export async function execute(interaction) {
 
         // --- /link status ---
         if (sub === "status") {
-            console.log("[DEBUG] /link status initiated.");
             const identifier = interaction.options.getString("identifier");
             await interaction.deferReply({ ephemeral: false });
-            console.log("[DEBUG] Interaction deferred.");
 
             let userRecord = null;
             const discordIdMatch = identifier.match(/<@!?(\d+)>|^\d{17,19}$/);
             
             if (discordIdMatch) {
                 const discordId = discordIdMatch[1] || identifier;
-                console.log(`[DEBUG] Searching by Discord ID: ${discordId}`);
                 userRecord = await findUserByDiscordId(discordId);
             } else {
-                console.log(`[DEBUG] Searching by Roblox username: ${identifier}`);
                 const robloxData = await getRobloxUser(identifier);
                 if (robloxData) {
-                    console.log(`[DEBUG] Roblox user found, ID: ${robloxData.id}. Searching in DB...`);
                     userRecord = await findUser(robloxData.id.toString());
                 }
             }
-
-            console.log("[DEBUG] Search complete. User record found:", !!userRecord);
 
             if (!userRecord || !userRecord.isVerified || !userRecord.discordId) {
                 return interaction.editReply({ content: `ℹ️ No active verification link found for **${identifier}**.` });
@@ -158,7 +166,28 @@ export async function execute(interaction) {
             }
             
             try {
-                await removeVerification(member, config);
+                // [PERBAIKAN] Panggil removeVerification dari helpers.js
+                // Ini akan menghapus role 'verifiedRoleId' dan nickname
+                await removeVerification(member);
+                
+                // --- [PERBAIKAN LOGIKA] ---
+                // Logika ini HANYA untuk MENGHAPUS semua role rank.
+                // TIDAK memanggil syncRankRole.
+                
+                const rankMapping = config.rankToRoleMapping || {};
+                const allRankRoleIds = Object.values(rankMapping);
+                
+                // Cari semua role rank yang dimiliki pengguna
+                const rolesToRemove = member.roles.cache.filter(role => 
+                    allRankRoleIds.includes(role.id)
+                );
+                
+                if (rolesToRemove.size > 0) {
+                    // Hapus semua role rank itu
+                    await member.roles.remove(rolesToRemove);
+                }
+                // --- [AKHIR PERBAIKAN LOGIKA] ---
+                
             } catch (error) {
                 return interaction.editReply({ content: `❌ **Action Failed:** ${error.message}` });
             }
@@ -171,7 +200,7 @@ export async function execute(interaction) {
                 { name: "Roblox Account", value: `${user.robloxUsername} (${user.robloxId})` }
             ]);
 
-            return interaction.editReply({ content: `✅ Successfully unlinked <@${member.id}> from **${user.robloxUsername}**.` });
+            return interaction.editReply({ content: `✅ Successfully unlinked <@${member.id}> from **${user.robloxUsername}** and removed their verified & rank roles.` });
         }
 
         // --- /link setup ---
