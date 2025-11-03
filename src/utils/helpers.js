@@ -1,15 +1,16 @@
 import fetch from "node-fetch";
-import config from "../config.json" with { type: "json" };
+import config from "../config.json" with { type: "json" }; // <-- SATU-SATUNYA SUMBER CONFIG
 import noblox from "noblox.js";
 
 export const levels = config.levels || [];
 export const achievementsConfig = config.achievements || [];
 export const embedColor = config.embedColor;
 
-export async function performVerification(member, robloxData, config, isInGroup = null) {
-    const verifiedRoleId = config.verifiedRoleId;
+// [REVISI] Argumen 'config' dihapus. Fungsi ini sekarang menggunakan config global.
+export async function performVerification(member, robloxData, isInGroup = null) {
+    const verifiedRoleId = config.verifiedRoleId; // <-- Menggunakan config global
     const verifiedRole = member.guild.roles.cache.get(verifiedRoleId);
-    const groupId = config.groupId;
+    const groupId = config.groupId; // <-- Menggunakan config global
 
     if (!verifiedRole) {
         throw new Error("The verified role ID is invalid or not found in the server.");
@@ -95,8 +96,9 @@ export async function getRobloxGroupData(groupId = config.groupId) {
     }
 }
 
-export async function removeVerification(member, config) {
-    const verifiedRoleId = config.verifiedRoleId;
+// [REVISI PENTING] Argumen 'config' dihapus.
+export async function removeVerification(member) {
+    const verifiedRoleId = config.verifiedRoleId; // <-- Menggunakan config global
     if (member.roles.cache.has(verifiedRoleId)) {
         try {
             await member.roles.remove(verifiedRoleId);
@@ -172,4 +174,47 @@ export function getLevel(xp) {
         xpNeededText = `Needs **${Math.max(0, neededXP - currentXP)} XP** to reach **${nextLevel.name}**`;
     }
     return { levelName: level.name, bar, progressPercent, xpNeededText };
+}
+
+/**
+ * Menyinkronkan role Discord pengguna berdasarkan level XP mereka.
+ * Menghapus role rank lama dan menambahkan yang baru.
+ * @param {import('discord.js').GuildMember} member - Objek member Discord.
+ * @param {number} xp - Jumlah XP pengguna saat ini.
+ * @returns {Promise<import('discord.js').Role | null>} Objek Role yang baru ditambahkan/disinkronkan, atau null.
+ */
+export async function syncRankRole(member, xp) {
+    try {
+        // [REVISI] Menggunakan config global
+        const rankMapping = config.rankToRoleMapping || {};
+        const allRankRoleIds = Object.values(rankMapping);
+
+        if (allRankRoleIds.length === 0) {
+            console.warn("[WARN] 'rankToRoleMapping' di config.json kosong. Melewatkan sinkronisasi role rank.");
+            return null;
+        }
+
+        const levelName = getLevel(xp).levelName;
+        const targetRoleId = rankMapping[levelName];
+        const targetRole = targetRoleId ? member.guild.roles.cache.get(targetRoleId) : null;
+
+        const rolesToRemove = member.roles.cache.filter(role => 
+            allRankRoleIds.includes(role.id) && role.id !== targetRoleId
+        );
+        
+        if (rolesToRemove.size > 0) {
+            await member.roles.remove(rolesToRemove);
+        }
+
+        if (targetRole && !member.roles.cache.has(targetRoleId)) {
+            await member.roles.add(targetRole);
+            return targetRole;
+        }
+
+        return targetRole;
+
+    } catch (error) {
+        console.error(`[ERROR] Gagal menyinkronkan role rank untuk ${member.user.tag}: ${error.message}`);
+        return null;
+    }
 }
