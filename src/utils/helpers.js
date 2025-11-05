@@ -1,16 +1,16 @@
 import fetch from "node-fetch";
-import config from "../config.json" with { type: "json" }; // <-- SATU-SATUNYA SUMBER CONFIG
+import config from "../config.json" with { type: "json" };
+// [REVISI] Hapus import deptRanks.json
 import noblox from "noblox.js";
 
 export const levels = config.levels || [];
 export const achievementsConfig = config.achievements || [];
 export const embedColor = config.embedColor;
 
-// [REVISI] Argumen 'config' dihapus. Fungsi ini sekarang menggunakan config global.
 export async function performVerification(member, robloxData, isInGroup = null) {
-    const verifiedRoleId = config.verifiedRoleId; // <-- Menggunakan config global
+    const verifiedRoleId = config.verifiedRoleId;
     const verifiedRole = member.guild.roles.cache.get(verifiedRoleId);
-    const groupId = config.groupId; // <-- Menggunakan config global
+    const groupId = config.groupId;
 
     if (!verifiedRole) {
         throw new Error("The verified role ID is invalid or not found in the server.");
@@ -96,9 +96,8 @@ export async function getRobloxGroupData(groupId = config.groupId) {
     }
 }
 
-// [REVISI PENTING] Argumen 'config' dihapus.
 export async function removeVerification(member) {
-    const verifiedRoleId = config.verifiedRoleId; // <-- Menggunakan config global
+    const verifiedRoleId = config.verifiedRoleId;
     if (member.roles.cache.has(verifiedRoleId)) {
         try {
             await member.roles.remove(verifiedRoleId);
@@ -176,16 +175,8 @@ export function getLevel(xp) {
     return { levelName: level.name, bar, progressPercent, xpNeededText };
 }
 
-/**
- * Menyinkronkan role Discord pengguna berdasarkan level XP mereka.
- * Menghapus role rank lama dan menambahkan yang baru.
- * @param {import('discord.js').GuildMember} member - Objek member Discord.
- * @param {number} xp - Jumlah XP pengguna saat ini.
- * @returns {Promise<import('discord.js').Role | null>} Objek Role yang baru ditambahkan/disinkronkan, atau null.
- */
 export async function syncRankRole(member, xp) {
     try {
-        // [REVISI] Menggunakan config global
         const rankMapping = config.rankToRoleMapping || {};
         const allRankRoleIds = Object.values(rankMapping);
 
@@ -215,6 +206,87 @@ export async function syncRankRole(member, xp) {
 
     } catch (error) {
         console.error(`[ERROR] Gagal menyinkronkan role rank untuk ${member.user.tag}: ${error.message}`);
+        return null;
+    }
+}
+
+// --- [FUNGSI BARU UNTUK GUIDE & SAR] ---
+
+/**
+ * Mengambil nama rank & roleId Guide berdasarkan poin.
+ * @param {number} points - Jumlah guide points.
+ * @returns {{levelName: string, roleId: string}}
+ */
+export function getGuideLevel(points) {
+    // [REVISI] Baca dari config.json
+    const ranks = config.guideRanks || [];
+    if (!ranks.length) return { levelName: "N/A", roleId: null };
+    
+    let currentRank = ranks[0];
+    for (const rank of ranks) {
+        if (points >= rank.points) currentRank = rank;
+        else break;
+    }
+    return { levelName: currentRank.name, roleId: currentRank.roleId };
+}
+
+/**
+ * Mengambil nama rank & roleId SAR berdasarkan poin.
+ * @param {number} points - Jumlah SAR points.
+ * @returns {{levelName: string, roleId: string}}
+ */
+export function getSarLevel(points) {
+    // [REVISI] Baca dari config.json
+    const ranks = config.sarRanks || [];
+    if (!ranks.length) return { levelName: "N/A", roleId: null };
+    
+    let currentRank = ranks[0];
+    for (const rank of ranks) {
+        if (points >= rank.points) currentRank = rank;
+        else break;
+    }
+    return { levelName: currentRank.name, roleId: currentRank.roleId };
+}
+
+/**
+ * Menyinkronkan role departemen (Guide/SAR).
+ * @param {import('discord.js').GuildMember} member - Objek member Discord.
+ * @param {string} targetRoleId - ID role baru yang seharusnya dimiliki.
+ * @param {string[]} allRankRoleIds - Array semua ID role untuk departemen ini.
+ * @returns {Promise<import('discord.js').Role | null>}
+ */
+export async function syncDepartmentRole(member, targetRoleId, allRankRoleIds) {
+    try {
+        if (!targetRoleId || allRankRoleIds.length === 0) {
+            console.warn("[WARN] syncDepartmentRole: Role mapping kosong.");
+            return null;
+        }
+
+        const targetRole = member.guild.roles.cache.get(targetRoleId);
+        if (!targetRole) {
+            console.error(`[ERROR] Role departemen dengan ID '${targetRoleId}' tidak ditemukan.`);
+            return null;
+        }
+
+        // 1. Hapus semua role rank LAMA dari departemen ini
+        const rolesToRemove = member.roles.cache.filter(role => 
+            allRankRoleIds.includes(role.id) && role.id !== targetRoleId
+        );
+        
+        if (rolesToRemove.size > 0) {
+            await member.roles.remove(rolesToRemove);
+        }
+
+        // 2. Tambahkan role rank BARU (jika belum dimiliki)
+        if (!member.roles.cache.has(targetRoleId)) {
+            await member.roles.add(targetRole);
+            return targetRole; // Kembalikan role yang ditambahkan
+        }
+
+        return targetRole; // Kembalikan role target (meskipun sudah dimiliki)
+
+    } catch (error) {
+        console.error(`[ERROR] Gagal menyinkronkan role departemen untuk ${member.user.tag}: ${error.message}`);
         return null;
     }
 }
