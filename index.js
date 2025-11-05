@@ -19,12 +19,15 @@ import { data as listRewardCommand, execute as listRewardExecute } from "./src/c
 import { data as debugCommand, execute as debugExecute } from "./src/commands/debug.js";
 import { data as xpdCommand, execute as xpdExecute } from "./src/commands/xpd.js";
 import { data as expodCommand, execute as expodExecute } from "./src/commands/expod.js";
-import { data as statsCommand, execute as statsExecute } from "./src/commands/stats.js";
 import { data as linkCommand, execute as linkExecute } from "./src/commands/link.js";
 import { data as verifyCommand, execute as verifyExecute, handleComponent as verifyHandleComponent, handleModalSubmit as verifyHandleModal } from "./src/commands/verify.js";
 import { data as getroleCommand, execute as getroleExecute } from "./src/commands/getrole.js";
 import { data as syncCommand, execute as syncExecute } from "./src/commands/sync.js";
 import { data as messageCommand, execute as messageExecute, handleModalSubmit as messageHandleModal } from "./src/commands/message.js";
+import { data as statsCommand, execute as statsExecute } from "./src/commands/stats.js";
+import { data as guideCommand, execute as guideExecute } from "./src/commands/guide.js";
+import { data as sarCommand, execute as sarExecute } from "./src/commands/sar.js";
+import { data as deptrankCommand, execute as deptrankExecute } from "./src/commands/deptrank.js";
 
 
 dotenv.config();
@@ -89,7 +92,7 @@ async function checkMilestones() {
 }
 
 // ----------------- Event: ready -----------------
-client.on("ready", async () => {
+client.on("clientReady", async () => {
     console.log(`✅ Logged in as ${client.user.tag}`);
 
     const guild = client.guilds.cache.first();
@@ -110,8 +113,11 @@ client.on("ready", async () => {
     const commands = [
         xpCommand, expoCommand, rankCommand, lbCommand, rewardCommand, 
         hofCommand, listRewardCommand, debugCommand,
-        linkCommand, verifyCommand, xpdCommand, expodCommand, getroleCommand, transcriptCommand,
-        syncCommand, messageCommand, statsCommand
+        linkCommand, verifyCommand, xpdCommand, expodCommand, getroleCommand, 
+        transcriptCommand, 
+        syncCommand, messageCommand, statsCommand,
+        guideCommand, sarCommand,
+        deptrankCommand // [TAMBAHKAN INI]
     ];
 
     if (guild) {
@@ -131,22 +137,18 @@ client.on("interactionCreate", async (interaction) => {
     try {
         if (interaction.isStringSelectMenu() || interaction.isButton()) {
             if (interaction.customId.startsWith('verify_')) {
-                // [PERBAIKAN] Tambahkan await
                 return await verifyHandleComponent(interaction);
             }
             if (interaction.customId.startsWith('lb_') || interaction.customId.startsWith('reward_')) {
-                // [PERBAIKAN] Tambahkan await
                 return await handleComponentInteraction(interaction);
             }
         }
 
         if (interaction.isModalSubmit()) {
             if (interaction.customId === 'verify_modal_submit') {
-                // [PERBAIKAN] Tambahkan await
                 return await verifyHandleModal(interaction);
             }
             if (interaction.customId === 'send_message_modal') {
-                // [PERBAIKAN] Tambahkan await
                 return await messageHandleModal(interaction);
             }
         }
@@ -169,11 +171,13 @@ client.on("interactionCreate", async (interaction) => {
             case "list-reward": await listRewardExecute(interaction); break;
             case "debug": await debugExecute(interaction); break;
             case "link": await linkExecute(interaction); break;
-            case "stats": await statsExecute(interaction); break;
             case "verify": await verifyExecute(interaction); break;
-            // Handle eksekusi command baru
             case "sync": await syncExecute(interaction); break;
             case "message": await messageExecute(interaction); break;
+            case "stats": await statsExecute(interaction); break;
+            case "guide": await guideExecute(interaction); break;
+            case "sar": await sarExecute(interaction); break;
+            case "deptrank": await deptrankExecute(interaction); break;
             default:
                 await interaction.reply({ content: "❌ Unknown command.", ephemeral: true });
                 break;
