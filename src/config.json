@@ -61,5 +61,21 @@
     { "id": 8, "name": "👑Mountain Conqueror", "description": "Participate in all mountain expeditions." },
     { "id": 9, "name": "🏆Event Winners", "description": "Winning the event at Mooncrest" },
     { "id": 10, "name": "🏆Challenge Winners", "description": "Winning the challenge at Mooncrest" }
+  ],
+
+  "guideManagerRoles": ["1417377384197390428"],
+  "sarManagerRoles": ["1435236185915260989"],
+  
+  "guideRanks": [
+    { "name": "Probation Guide", "points": 1, "roleId": "1417377715274907689" },
+    { "name": "Junior Guide", "points": 20, "roleId": "1417377665173946419" },
+    { "name": "Senior Guide", "points": 100, "roleId": "1417377600514429048" },
+    { "name": "Lead Guide", "points": 300, "roleId": "1417377384197390428" }
+  ],
+  "sarRanks": [
+    { "name": "SAR Trainee", "points": 1, "roleId": "1435237371074318468" },
+    { "name": "SAR Operator", "points": 50, "roleId": "1435237246084059146" },
+    { "name": "SAR Specialist", "points": 150, "roleId": "1435237121559367762" },
+    { "name": "SAR Commander", "points": 300, "roleId": "1435236185915260989" }
   ]
 }
