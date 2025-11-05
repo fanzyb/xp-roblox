@@ -41,6 +41,8 @@ export async function findUser(robloxId) {
             robloxId: doc.id,
             xp: data.xp || 0,
             expeditions: data.expeditions || 0,
+            guidePoints: data.guidePoints || 0, // [REVISI]
+            sarPoints: data.sarPoints || 0,     // [REVISI]
             achievements: data.achievements || [],
             discordId: data.discordId || null,
             isVerified: data.isVerified || false,
@@ -63,6 +65,8 @@ export async function findUserByDiscordId(discordId) {
             robloxId: doc.id,
             xp: data.xp || 0,
             expeditions: data.expeditions || 0,
+            guidePoints: data.guidePoints || 0, // [REVISI]
+            sarPoints: data.sarPoints || 0,     // [REVISI]
             achievements: data.achievements || [],
             discordId: data.discordId || null,
             isVerified: data.isVerified || false,
