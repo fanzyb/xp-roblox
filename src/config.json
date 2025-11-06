@@ -16,6 +16,9 @@
   "eventLogChannelId": "1429805496482926622",
     
   "transcriptLogChannelId": "1432252981633351722",
+  "ticketSupportRoleId": "1435969333762330764",
+  "ticketCategoryId": "1421921896655749291",
+  "ticketTranscriptLogId": "1435976222067785738",
 
   "rankToRoleMapping": {
     "Climber": "1412761938991251516",
