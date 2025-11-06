@@ -63,6 +63,7 @@ export function generateVerificationPanel(type, data = {}) {
         })
         .setFooter({ text: "This verification is required to track XP and grant rewards!" })
         .setColor(embedColor)
+        .setImage("https://cdn.discordapp.com/attachments/1435964396408148088/1435967416264949811/VERIFY.png?ex=690de45f&is=690c92df&hm=f8ed08710d5cd14854d4a064ccb4196d6f153c47fd4b85866db350403fd64fac")
         .setTimestamp();
 
     const button = new ButtonBuilder()
