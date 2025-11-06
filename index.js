@@ -28,11 +28,19 @@ import { data as statsCommand, execute as statsExecute } from "./src/commands/st
 import { data as guideCommand, execute as guideExecute } from "./src/commands/guide.js";
 import { data as sarCommand, execute as sarExecute } from "./src/commands/sar.js";
 import { data as deptrankCommand, execute as deptrankExecute } from "./src/commands/deptrank.js";
+// Import Ticket Handlers
+import { 
+    data as ticketCommand, 
+    execute as ticketExecute, 
+    handleTicketButton, 
+    handleTicketModal 
+} from "./src/commands/ticket.js";
 
 
 dotenv.config();
 import "./src/db/firestore.js"; 
 
+// Intent dikembalikan, hanya Guilds
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 // --- Logika Pengecekan Milestone ---
@@ -78,6 +86,7 @@ async function checkMilestones() {
             .setDescription(`## We've just hit **${nextMilestone.toLocaleString()}** members in our Roblox Group!`)
             .setColor("#1B1464")
             .setThumbnail(client.guilds.cache.first()?.iconURL() ?? null)
+            .setImage("https://cdn.discordapp.com/attachments/1435964396408148088/1435964470223441970/welcome.png?ex=690de1a0&is=690c9020&hm=51453bae01407a2ffd0623fd85c257d64b1cdc26ee16ac7771649cb1f39e185f&")
             .addFields({ name: "Thank You!", value: "A huge thank you to every single member for being a part of our community. Let's aim for the next milestone!" })
             .setTimestamp();
 
@@ -117,7 +126,8 @@ client.on("clientReady", async () => {
         transcriptCommand, 
         syncCommand, messageCommand, statsCommand,
         guideCommand, sarCommand,
-        deptrankCommand // [TAMBAHKAN INI]
+        deptrankCommand,
+        ticketCommand
     ];
 
     if (guild) {
@@ -142,6 +152,9 @@ client.on("interactionCreate", async (interaction) => {
             if (interaction.customId.startsWith('lb_') || interaction.customId.startsWith('reward_')) {
                 return await handleComponentInteraction(interaction);
             }
+            if (interaction.customId.startsWith('ticket_')) {
+                return await handleTicketButton(interaction);
+T            }
         }
 
         if (interaction.isModalSubmit()) {
@@ -150,6 +163,9 @@ client.on("interactionCreate", async (interaction) => {
             }
             if (interaction.customId === 'send_message_modal') {
                 return await messageHandleModal(interaction);
+            }
+            if (interaction.customId.startsWith('ticket_')) {
+                return await handleTicketModal(interaction);
             }
         }
 
@@ -178,6 +194,7 @@ client.on("interactionCreate", async (interaction) => {
             case "guide": await guideExecute(interaction); break;
             case "sar": await sarExecute(interaction); break;
             case "deptrank": await deptrankExecute(interaction); break;
+            case "ticket": await ticketExecute(interaction); break;
             default:
                 await interaction.reply({ content: "❌ Unknown command.", ephemeral: true });
                 break;
@@ -191,6 +208,8 @@ client.on("interactionCreate", async (interaction) => {
         }
     }
 });
+
+// Event guildMemberAdd (welcome message) telah dihapus
 
 // ----------------- Login -----------------
 client.login(process.env.TOKEN).catch(err => console.error("Login error:", err));
