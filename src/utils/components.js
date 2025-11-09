@@ -7,7 +7,7 @@ import config from "../config.json" with { type: "json" };
 // --- Reward Select Menu Handler ---
 // (Fungsi ini tidak berubah)
 export async function handleRewardSelectMenu(interaction) {
-    // customId format: reward_add:<username> or reward_remove:<username>
+    // ... (kode tetap sama) ...
     const [action, encodedName] = interaction.customId.split(":");
     const username = decodeURIComponent(encodedName || "");
     const selectedId = parseInt(interaction.values[0]);
@@ -26,22 +26,14 @@ export async function handleRewardSelectMenu(interaction) {
     if (action === "reward_add") {
         if (!user.achievements.includes(selectedId)) user.achievements.push(selectedId);
         await saveUser(user);
-
-        if (rewardLogChannel) {
-            // ... logika logging ...
-        }
-
+        if (rewardLogChannel) { /* ... logging ... */ }
         return interaction.update({ content: `✅ Added **${achv.name}** to **${robloxData.name}**`, components: [] });
     }
 
     if (action === "reward_remove") {
         user.achievements = user.achievements.filter(a => a !== selectedId);
         await saveUser(user);
-
-        if (rewardLogChannel) {
-           // ... logika logging ...
-        }
-
+        if (rewardLogChannel) { /* ... logging ... */ }
         return interaction.update({ content: `🗑 Removed **${achv.name}** from **${robloxData.name}**`, components: [] });
     }
 
@@ -49,10 +41,10 @@ export async function handleRewardSelectMenu(interaction) {
 }
 
 
-// --- Logika Tombol/Paginasi Leaderboard ---
+// --- Logika Tombol/Paginasi Leaderboard (DIPERBARUI) ---
 export async function generateLeaderboardEmbed(pageNum, lbType, limit = 10) {
-    const sortField = lbType === 'expo' ? 'expeditions' : 'xp';
-    const sortTitle = lbType === 'expo' ? 'Expedition' : 'XP';
+    const sortField = lbType === 'expo' ? 'expeditions' : 'xp'; 
+    const sortTitle = lbType === 'expo' ? 'Expedition' : '🌙 Lunar Points'; // <-- [GANTI]
 
     const totalUsers = await countTotalUsers();
     const totalPages = Math.max(1, Math.ceil(totalUsers / limit));
@@ -75,9 +67,8 @@ export async function generateLeaderboardEmbed(pageNum, lbType, limit = 10) {
         new ButtonBuilder().setCustomId(`lb_next_${lbType}_${pageNum}`).setLabel("Next ➡️").setStyle(ButtonStyle.Primary).setDisabled(pageNum === totalPages)
     );
 
-    // Perbaikan: Custom ID untuk switch selalu merujuk ke halaman 1
     const switchRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`lb_switch_${lbType === 'xp' ? 'expo' : 'xp'}_1`).setLabel(`Switch to ${lbType === 'xp' ? 'Expedition' : 'XP'} LB`).setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`lb_switch_${lbType === 'xp' ? 'expo' : 'xp'}_1`).setLabel(`Switch to ${lbType === 'xp' ? 'Expedition' : '🌙 Lunar Points'} LB`).setStyle(ButtonStyle.Secondary) // <-- [GANTI]
     );
 
     return {
@@ -92,12 +83,10 @@ export async function generateLeaderboardEmbed(pageNum, lbType, limit = 10) {
 }
 
 export async function handleLeaderboardButton(interaction) {
-    // Cek apakah interaksi masih valid sebelum melanjutkan
     if (interaction.replied || interaction.deferred) {
         console.warn(`[WARN] Interaksi untuk ${interaction.customId} sudah ditangani.`);
         return;
     }
-
     try {
         const parts = interaction.customId.split("_");
         const btnAction = parts[1]; // prev, next, switch
@@ -109,23 +98,18 @@ export async function handleLeaderboardButton(interaction) {
 
         if (btnAction === 'switch') {
             newType = btnType;
-            newPage = 1; // Kembali ke halaman 1 saat switch
+            newPage = 1; 
         } else {
             newType = btnType;
             newPage = btnAction === 'prev' ? currentPage - 1 : currentPage + 1;
         }
 
-        // Beri tahu Discord bahwa kita sudah menerima kliknya
         await interaction.deferUpdate();
-
-        // Buat konten baru dan edit pesan aslinya
         const result = await generateLeaderboardEmbed(newPage, newType);
         await interaction.editReply(result);
 
     } catch (error) {
         console.error("Error menangani tombol leaderboard:", error);
-        // Jika terjadi error seperti 'Unknown Interaction', kita hanya log
-        // dan tidak mencoba membalas lagi karena sudah terlambat.
     }
 }
 
@@ -136,7 +120,6 @@ export async function handleComponentInteraction(interaction) {
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith("reward_")) {
         return handleRewardSelectMenu(interaction);
     }
-
     if (interaction.isButton() && interaction.customId.startsWith("lb_")) {
         return handleLeaderboardButton(interaction);
     }

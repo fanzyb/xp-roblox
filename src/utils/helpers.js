@@ -1,6 +1,5 @@
 import fetch from "node-fetch";
 import config from "../config.json" with { type: "json" };
-// [REVISI] Hapus import deptRanks.json
 import noblox from "noblox.js";
 
 export const levels = config.levels || [];
@@ -8,6 +7,7 @@ export const achievementsConfig = config.achievements || [];
 export const embedColor = config.embedColor;
 
 export async function performVerification(member, robloxData, isInGroup = null) {
+    // ... (kode tetap sama) ...
     const verifiedRoleId = config.verifiedRoleId;
     const verifiedRole = member.guild.roles.cache.get(verifiedRoleId);
     const groupId = config.groupId;
@@ -15,11 +15,9 @@ export async function performVerification(member, robloxData, isInGroup = null) 
     if (!verifiedRole) {
         throw new Error("The verified role ID is invalid or not found in the server.");
     }
-
     if (isInGroup === null) {
         isInGroup = await isInRobloxGroup(robloxData.id, groupId);
     }
-
     if (!isInGroup) {
         throw new Error("NOT_IN_GROUP");
     }
@@ -40,11 +38,11 @@ export async function performVerification(member, robloxData, isInGroup = null) 
     if (!member.roles.cache.has(verifiedRoleId)) {
         await member.roles.add(verifiedRole);
     }
-
     return { newNickname, nicknameWarning };
 }
 
 export async function getRobloxUser(username) {
+    // ... (kode tetap sama) ...
     try {
         const res = await fetch(`https://users.roblox.com/v1/usernames/users`, {
             method: "POST",
@@ -61,6 +59,7 @@ export async function getRobloxUser(username) {
 }
 
 export async function getRobloxAvatar(userId) {
+    // ... (kode tetap sama) ...
     try {
         const res = await fetch(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=420x420&format=png`);
         const data = await res.json();
@@ -72,6 +71,7 @@ export async function getRobloxAvatar(userId) {
 }
 
 export async function isInRobloxGroup(userId, groupId = config.groupId) {
+    // ... (kode tetap sama) ...
     try {
         const res = await fetch(`https://groups.roblox.com/v1/users/${userId}/groups/roles`);
         const data = await res.json();
@@ -83,6 +83,7 @@ export async function isInRobloxGroup(userId, groupId = config.groupId) {
 }
 
 export async function getRobloxGroupData(groupId = config.groupId) {
+    // ... (kode tetap sama) ...
     try {
         const res = await fetch(`https://groups.roblox.com/v1/groups/${groupId}`);
         const data = await res.json();
@@ -97,6 +98,7 @@ export async function getRobloxGroupData(groupId = config.groupId) {
 }
 
 export async function removeVerification(member) {
+    // ... (kode tetap sama) ...
     const verifiedRoleId = config.verifiedRoleId;
     if (member.roles.cache.has(verifiedRoleId)) {
         try {
@@ -117,6 +119,7 @@ export async function removeVerification(member) {
 }
 
 export async function getRoverVerification(discordId, guildId) {
+    // ... (kode tetap sama) ...
     if (!process.env.ROVER_API_KEY) {
         console.warn("[WARN] ROVER_API_KEY not found. RoVer integration is skipped.");
         return null;
@@ -138,6 +141,7 @@ export async function getRoverVerification(discordId, guildId) {
 }
 
 export async function getRobloxRankName(robloxId) {
+    // ... (kode tetap sama) ...
     try {
         const res = await fetch(`https://groups.roblox.com/v1/users/${robloxId}/groups/roles`);
         const data = await res.json();
@@ -170,12 +174,13 @@ export function getLevel(xp) {
         const filled = Math.max(0, Math.min(10, Math.floor(progressPercent / 10)));
         const empty = 10 - filled;
         bar = "⬜".repeat(filled) + "🔳".repeat(empty);
-        xpNeededText = `Needs **${Math.max(0, neededXP - currentXP)} XP** to reach **${nextLevel.name}**`;
+        xpNeededText = `Needs **${Math.max(0, neededXP - currentXP)} 🌙 Lunar Points** to reach **${nextLevel.name}**`; // <-- [GANTI]
     }
     return { levelName: level.name, bar, progressPercent, xpNeededText };
 }
 
 export async function syncRankRole(member, xp) {
+    // ... (kode tetap sama) ...
     try {
         const rankMapping = config.rankToRoleMapping || {};
         const allRankRoleIds = Object.values(rankMapping);
@@ -192,7 +197,7 @@ export async function syncRankRole(member, xp) {
         const rolesToRemove = member.roles.cache.filter(role => 
             allRankRoleIds.includes(role.id) && role.id !== targetRoleId
         );
-        
+
         if (rolesToRemove.size > 0) {
             await member.roles.remove(rolesToRemove);
         }
@@ -210,18 +215,13 @@ export async function syncRankRole(member, xp) {
     }
 }
 
-// --- [FUNGSI BARU UNTUK GUIDE & SAR] ---
+// --- [FUNGSI UNTUK GUIDE & SAR] ---
 
-/**
- * Mengambil nama rank & roleId Guide berdasarkan poin.
- * @param {number} points - Jumlah guide points.
- * @returns {{levelName: string, roleId: string}}
- */
 export function getGuideLevel(points) {
-    // [REVISI] Baca dari config.json
+    // ... (kode tetap sama) ...
     const ranks = config.guideRanks || [];
     if (!ranks.length) return { levelName: "N/A", roleId: null };
-    
+
     let currentRank = ranks[0];
     for (const rank of ranks) {
         if (points >= rank.points) currentRank = rank;
@@ -230,16 +230,11 @@ export function getGuideLevel(points) {
     return { levelName: currentRank.name, roleId: currentRank.roleId };
 }
 
-/**
- * Mengambil nama rank & roleId SAR berdasarkan poin.
- * @param {number} points - Jumlah SAR points.
- * @returns {{levelName: string, roleId: string}}
- */
 export function getSarLevel(points) {
-    // [REVISI] Baca dari config.json
+    // ... (kode tetap sama) ...
     const ranks = config.sarRanks || [];
     if (!ranks.length) return { levelName: "N/A", roleId: null };
-    
+
     let currentRank = ranks[0];
     for (const rank of ranks) {
         if (points >= rank.points) currentRank = rank;
@@ -248,14 +243,8 @@ export function getSarLevel(points) {
     return { levelName: currentRank.name, roleId: currentRank.roleId };
 }
 
-/**
- * Menyinkronkan role departemen (Guide/SAR).
- * @param {import('discord.js').GuildMember} member - Objek member Discord.
- * @param {string} targetRoleId - ID role baru yang seharusnya dimiliki.
- * @param {string[]} allRankRoleIds - Array semua ID role untuk departemen ini.
- * @returns {Promise<import('discord.js').Role | null>}
- */
 export async function syncDepartmentRole(member, targetRoleId, allRankRoleIds) {
+    // ... (kode tetap sama) ...
     try {
         if (!targetRoleId || allRankRoleIds.length === 0) {
             console.warn("[WARN] syncDepartmentRole: Role mapping kosong.");
@@ -268,22 +257,20 @@ export async function syncDepartmentRole(member, targetRoleId, allRankRoleIds) {
             return null;
         }
 
-        // 1. Hapus semua role rank LAMA dari departemen ini
         const rolesToRemove = member.roles.cache.filter(role => 
             allRankRoleIds.includes(role.id) && role.id !== targetRoleId
         );
-        
+
         if (rolesToRemove.size > 0) {
             await member.roles.remove(rolesToRemove);
         }
 
-        // 2. Tambahkan role rank BARU (jika belum dimiliki)
         if (!member.roles.cache.has(targetRoleId)) {
             await member.roles.add(targetRole);
-            return targetRole; // Kembalikan role yang ditambahkan
+            return targetRole; 
         }
 
-        return targetRole; // Kembalikan role target (meskipun sudah dimiliki)
+        return targetRole; 
 
     } catch (error) {
         console.error(`[ERROR] Gagal menyinkronkan role departemen untuk ${member.user.tag}: ${error.message}`);
