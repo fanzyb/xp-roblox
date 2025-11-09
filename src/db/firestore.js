@@ -20,6 +20,7 @@ try {
 const USERS_COLLECTION = "users";
 const EVENT_SUMMIT_COLLECTION = "eventSummitGuides"; // Nama collection event
 const META_COLLECTION = "metadata";
+const MOD_LOGS_COLLECTION = "moderation_logs"; // <-- Untuk warn
 
 // --- Fungsi untuk Collection 'users' ---
 
@@ -41,8 +42,8 @@ export async function findUser(robloxId) {
             robloxId: doc.id,
             xp: data.xp || 0,
             expeditions: data.expeditions || 0,
-            guidePoints: data.guidePoints || 0, // [REVISI]
-            sarPoints: data.sarPoints || 0,     // [REVISI]
+            guidePoints: data.guidePoints || 0,
+            sarPoints: data.sarPoints || 0,     
             achievements: data.achievements || [],
             discordId: data.discordId || null,
             isVerified: data.isVerified || false,
@@ -65,8 +66,8 @@ export async function findUserByDiscordId(discordId) {
             robloxId: doc.id,
             xp: data.xp || 0,
             expeditions: data.expeditions || 0,
-            guidePoints: data.guidePoints || 0, // [REVISI]
-            sarPoints: data.sarPoints || 0,     // [REVISI]
+            guidePoints: data.guidePoints || 0,
+            sarPoints: data.sarPoints || 0,     
             achievements: data.achievements || [],
             discordId: data.discordId || null,
             isVerified: data.isVerified || false,
@@ -166,4 +167,74 @@ export async function getLastAnnouncedMilestone() {
 export async function setLastAnnouncedMilestone(count) {
     if (!db) throw new Error("Firestore DB not initialized.");
     await db.collection(META_COLLECTION).doc('milestones').set({ lastAnnounced: count });
+}
+
+// --- Fungsi untuk Moderasi (Warn) ---
+
+/**
+ * Menyimpan data peringatan (warn) ke Firestore.
+ * @param {string} userId - ID user yang di-warn.
+ * @param {string} guildId - ID server.
+ * @param {string} moderatorId - ID moderator yang memberi warn.
+ * @param {string} reason - Alasan warn.
+ * @param {string} caseId - ID unik untuk kasus ini.
+ */
+export async function saveWarning(userId, guildId, moderatorId, reason, caseId) {
+    if (!db) throw new Error("Firestore DB not initialized.");
+    const warnData = {
+        userId,
+        guildId,
+        moderatorId,
+        reason,
+        caseId,
+        timestamp: admin.firestore.FieldValue.serverTimestamp() // Otomatis pakai waktu server
+    };
+    await db.collection(MOD_LOGS_COLLECTION).add(warnData);
+    return warnData;
+}
+
+/**
+ * Mengambil semua data peringatan (warn) untuk seorang user.
+ * @param {string} userId - ID user.
+ * @param {string} guildId - ID server.
+ * @returns {Promise<Array<object>>} - Array berisi data warn.
+ */
+export async function getWarnings(userId, guildId) {
+    if (!db) return [];
+    const snapshot = await db.collection(MOD_LOGS_COLLECTION)
+        .where('userId', '==', userId)
+        .where('guildId', '==', guildId)
+        .orderBy('timestamp', 'desc') // Tampilkan yang terbaru dulu
+        .get();
+
+    if (snapshot.empty) return [];
+    return snapshot.docs.map(doc => doc.data());
+}
+
+/**
+ * [BARU] Menghapus data peringatan berdasarkan Case ID.
+ * @param {string} caseId - Case ID dari warning.
+ * @param {string} guildId - ID server.
+ * @returns {Promise<object|null>} - Data warning yang dihapus, atau null jika tidak ditemukan.
+ */
+export async function deleteWarningByCaseId(caseId, guildId) {
+    if (!db) return null;
+
+    // Cari dokumen berdasarkan caseId dan guildId
+    const snapshot = await db.collection(MOD_LOGS_COLLECTION)
+        .where('caseId', '==', caseId)
+        .where('guildId', '==', guildId)
+        .limit(1)
+        .get();
+
+    if (snapshot.empty) {
+        return null; // Tidak ada warning yang ditemukan
+    }
+
+    const doc = snapshot.docs[0];
+    const deletedData = doc.data(); // Ambil datanya sebelum dihapus
+
+    await doc.ref.delete(); // Hapus dokumen
+
+    return deletedData; // Kembalikan data yang tadi dihapus
 }
