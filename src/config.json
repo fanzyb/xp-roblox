@@ -15,10 +15,22 @@
   "eventManagerRoles": ["1429805230672969742"],
   "eventLogChannelId": "1429805496482926622",
     
+  "modLogChannelId": "1413770512202596445",
+  "auditLogChannelId": "1413770512202596445",
+    
   "transcriptLogChannelId": "1432252981633351722",
   "ticketSupportRoleId": "1435969333762330764",
   "ticketCategoryId": "1421921896655749291",
   "ticketTranscriptLogId": "1435976222067785738",
+    
+  "tempVoiceCategoryId": "1399341895611711509",
+  "tempVoiceCreateChannelId": "1420335529399943232",
+  "tempVoiceControlChannelId": "1409980332807032892",
+
+  "welcomeChannelIds": [
+    "1399604111686762516",
+    "1422142704200056862" 
+  ],
 
   "rankToRoleMapping": {
     "Climber": "1412761938991251516",
