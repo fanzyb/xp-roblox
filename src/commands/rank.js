@@ -1,11 +1,11 @@
 import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
 import { getRobloxUser, getRobloxAvatar, getLevel, embedColor, achievementsConfig, getRoverVerification, performVerification } from "../utils/helpers.js";
 import { findUser, saveUser, countUsersWhere, findUserByDiscordId } from "../db/firestore.js";
-import { logError } from "../utils/errorLogger.js"; // Pastikan logError diimpor
+import { logError } from "../utils/errorLogger.js";
 
 export const data = new SlashCommandBuilder()
     .setName("rank")
-    .setDescription("Check your rank or someone else's (integrates with RoVer).")
+    .setDescription("Check your rank or someone else's.")
     .addStringOption(opt =>
         opt.setName("target")
            .setDescription("Roblox username, Discord user, or Discord ID (optional).")
@@ -13,7 +13,6 @@ export const data = new SlashCommandBuilder()
     );
 
 export async function execute(interaction) {
-    // Bungkus semua logika dengan try...catch
     try {
         await interaction.deferReply();
 
@@ -78,7 +77,7 @@ export async function execute(interaction) {
 
             try {
                 const member = await interaction.guild.members.fetch(discordIdToSearch);
-                await performVerification(member, robloxApiDataForNewUser, config);
+                await performVerification(member, robloxApiDataForNewUser); // <-- [FIX] Menghapus config
             } catch(e) {
                 console.warn(`[WARN] Could not apply role/nickname during auto-link for ${discordIdToSearch}: ${e.message}`);
             }
@@ -111,9 +110,9 @@ export async function execute(interaction) {
             .setThumbnail(avatar)
             .setColor(embedColor)
             .addFields(
-                { name: "Global Rank (XP)", value: `#${rank}`, inline: true },
+                { name: "Global Rank (Lunar Points)", value: `#${rank}`, inline: true }, // <-- [GANTI]
                 { name: "Level", value: levelName, inline: true },
-                { name: "XP", value: String(userFromDb.xp), inline: true },
+                { name: "Lunar Points", value: String(userFromDb.xp), inline: true }, // <-- [GANTI]
                 { name: "Expeditions", value: String(userFromDb.expeditions || 0), inline: true },
                 { name: "Progress", value: `${bar} (${progressPercent}%)`, inline: false },
                 { name: "Next Level", value: xpNeededText, inline: false },
@@ -123,12 +122,11 @@ export async function execute(interaction) {
         return interaction.editReply({ embeds: [embed] });
 
     } catch (error) {
-        logError(error, interaction, "rank"); // Log error dengan benar
-        // Kirim pesan error di sini, jangan biarkan sampai ke index.js
+        logError(error, interaction, "rank");
         if (interaction.deferred || interaction.replied) {
             await interaction.editReply({ content: "❌ An unexpected error occurred while processing the rank command." });
         } else {
-            await interaction.reply({ content: "❌ An unexpected error occurred while processing the rank command.", ephemeral: true });
+            await interaction.reply({ content: "❌ An unexpected error occurred while processing the rank command.", flags: 64 });
         }
     }
 }

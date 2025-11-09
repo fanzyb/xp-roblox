@@ -6,27 +6,27 @@ import { logError } from "../utils/errorLogger.js";
 
 export const data = new SlashCommandBuilder()
     .setName("xpd")
-    .setDescription("Manage a linked Discord user's XP (Admin only)")
+    .setDescription("Manage a linked Discord user's Lunar Points (Admin only)") // <-- [GANTI]
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addSubcommand(sub =>
-        sub.setName("add").setDescription("Add XP and expedition count to a linked user")
+        sub.setName("add").setDescription("Add Lunar Points and expedition count to a linked user") // <-- [GANTI]
             .addUserOption(opt => opt.setName("member").setDescription("The Discord member to manage").setRequired(true))
-            .addIntegerOption(opt => opt.setName("amount").setDescription("XP amount").setRequired(true))
+            .addIntegerOption(opt => opt.setName("amount").setDescription("Lunar Points amount").setRequired(true)) // <-- [GANTI]
     )
     .addSubcommand(sub =>
-        sub.setName("remove").setDescription("Remove XP and expedition count from a linked user")
+        sub.setName("remove").setDescription("Remove Lunar Points and expedition count from a linked user") // <-- [GANTI]
             .addUserOption(opt => opt.setName("member").setDescription("The Discord member to manage").setRequired(true))
-            .addIntegerOption(opt => opt.setName("amount").setDescription("XP amount").setRequired(true))
+            .addIntegerOption(opt => opt.setName("amount").setDescription("Lunar Points amount").setRequired(true)) // <-- [GANTI]
     )
     .addSubcommand(sub =>
-        sub.setName("set").setDescription("Set XP for a linked user")
+        sub.setName("set").setDescription("Set Lunar Points for a linked user") // <-- [GANTI]
             .addUserOption(opt => opt.setName("member").setDescription("The Discord member to manage").setRequired(true))
-            .addIntegerOption(opt => opt.setName("amount").setDescription("XP amount").setRequired(true))
+            .addIntegerOption(opt => opt.setName("amount").setDescription("Lunar Points amount").setRequired(true)) // <-- [GANTI]
     )
     .addSubcommand(sub =>
-        sub.setName("bonus").setDescription("Give bonus XP to a linked user (no expedition count)")
+        sub.setName("bonus").setDescription("Give bonus Lunar Points to a linked user (no expedition count)") // <-- [GANTI]
             .addUserOption(opt => opt.setName("member").setDescription("The Discord member to manage").setRequired(true))
-            .addIntegerOption(opt => opt.setName("amount").setDescription("Bonus XP amount").setRequired(true))
+            .addIntegerOption(opt => opt.setName("amount").setDescription("Bonus Lunar Points amount").setRequired(true)) // <-- [GANTI]
             .addStringOption(opt => opt.setName("reason").setDescription("Optional reason for the bonus").setRequired(false))
     );
 
@@ -35,7 +35,7 @@ export async function execute(interaction) {
         const allowed =
             interaction.member.permissions.has(PermissionFlagsBits.Administrator) ||
             interaction.member.roles.cache.some(r => (config.xpManagerRoles || []).includes(r.id));
-        if (!allowed) return interaction.reply({ content: "❌ You do not have permission to use this command.", ephemeral: true });
+        if (!allowed) return interaction.reply({ content: "❌ You do not have permission to use this command.", flags: 64 });
 
         await interaction.deferReply({ ephemeral: false });
 
@@ -75,14 +75,14 @@ export async function execute(interaction) {
 
         const newLevel = getLevel(user.xp).levelName;
         let levelMsg = newLevel !== oldLevel ? ` 🎉 **${robloxData.name} has leveled up to ${newLevel}!**` : "";
-        let responseMessage = `✅ Successfully performed '${action}' action with ${amount} XP for **${robloxData.name}** (linked to <@${member.id}>).${levelMsg}`;
+        let responseMessage = `✅ Successfully performed '${action}' action with ${amount} Lunar Points for **${robloxData.name}** (linked to <@${member.id}>).${levelMsg}`; // <-- [GANTI]
 
         if (action === "bonus") {
-            responseMessage = `✅ Gave **${amount}** bonus XP to **${robloxData.name}** (linked to <@${member.id}>).${levelMsg}`;
+            responseMessage = `✅ Gave **${amount}** bonus Lunar Points to **${robloxData.name}** (linked to <@${member.id}>).${levelMsg}`; // <-- [GANTI]
             if (reason) responseMessage += `\n*Reason: ${reason}*`;
         }
 
-        // --- PENAMBAHAN FITUR AUTO ROLE ---
+        // --- Auto Role ---
         if (newLevel !== oldLevel) {
             const robloxRankName = await getRobloxRankName(robloxData.id);
             const rankMapping = config.rankToRoleMapping || {};
@@ -93,17 +93,17 @@ export async function execute(interaction) {
                 if (targetRole) {
                     const allRankRoleIds = Object.values(rankMapping);
                     const rolesToRemove = member.roles.cache.filter(role => allRankRoleIds.includes(role.id));
-                    
+
                     if (rolesToRemove.size > 0) {
                         await member.roles.remove(rolesToRemove);
                     }
-                    
+
                     await member.roles.add(targetRole);
                     responseMessage += `\n👑 Their role has been updated to **${targetRole.name}**!`;
                 }
             }
         }
-        // --- AKHIR PENAMBAHAN ---
+        // --- Akhir Auto Role ---
 
         await interaction.editReply({ content: responseMessage });
 
@@ -116,12 +116,12 @@ export async function execute(interaction) {
                     { name: "Target Discord", value: `<@${member.id}>`, inline: true },
                     { name: "Target Roblox", value: `${robloxData.name}`, inline: true },
                     { name: "By", value: interaction.user.tag, inline: true },
-                    { name: "New XP", value: user.xp.toString(), inline: true }
+                    { name: "New Lunar Points", value: user.xp.toString(), inline: true } // <-- [GANTI]
                 ];
                 if (reason) {
                     logFields.push({ name: "Reason", value: reason });
                 }
-                const logEmbed = new EmbedBuilder().setTitle(`📊 XP Log (${action.charAt(0).toUpperCase() + action.slice(1)} - Discord)`).setColor(embedColor).addFields(logFields).setTimestamp();
+                const logEmbed = new EmbedBuilder().setTitle(`📊 Lunar Points Log (${action.charAt(0).toUpperCase() + action.slice(1)} - Discord)`).setColor(embedColor).addFields(logFields).setTimestamp(); // <-- [GANTI]
                 await xpLogChannel.send({ embeds: [logEmbed] });
             }
         } catch (logErr) {
@@ -133,7 +133,7 @@ export async function execute(interaction) {
         if (interaction.deferred || interaction.replied) {
             await interaction.editReply({ content: "❌ An unexpected error occurred while processing the xpd command." });
         } else {
-            await interaction.reply({ content: "❌ An unexpected error occurred while processing the xpd command.", ephemeral: true });
+            await interaction.reply({ content: "❌ An unexpected error occurred while processing the xpd command.", flags: 64 });
         }
     }
 }
