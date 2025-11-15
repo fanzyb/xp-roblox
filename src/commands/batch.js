@@ -88,23 +88,23 @@ export async function execute(interaction) {
         let processedCount = 0;
         let skippedCount = 0;
         const levelUpMessages = [];
-        // [REVISI] Siapkan array untuk daftar detail
         const successUsers = [];
         const skippedUsers = [];
+        const successRobloxNames = []; // <-- [PERUBAHAN] Array baru untuk nama Roblox
 
         for (const userId of targetUserIds) {
             try {
                 const member = await interaction.guild.members.fetch(userId).catch(() => null);
                 if (!member) {
                     skippedCount++;
-                    skippedUsers.push(`<@${userId}> (Not in server)`); // [REVISI] Catat alasan
+                    skippedUsers.push(`<@${userId}> (Not in server)`);
                     continue; 
                 }
 
                 const userFromDb = await findUserByDiscordId(userId);
                 if (!userFromDb || !userFromDb.isVerified) {
                     skippedCount++;
-                    skippedUsers.push(`<@${userId}> (Not verified)`); // [REVISI] Catat alasan
+                    skippedUsers.push(`<@${userId}> (Not verified)`);
                     continue; 
                 }
 
@@ -135,21 +135,22 @@ export async function execute(interaction) {
                     }
                 }
                 processedCount++;
-                successUsers.push(`<@${userId}>`); // [REVISI] Catat sukses
+                successUsers.push(`<@${userId}>`);
+                successRobloxNames.push(user.robloxUsername); // <-- [PERUBAHAN] Simpan nama Roblox
 
             } catch (error) {
                 console.error(`[BATCH] Failed to process user ${userId}:`, error);
                 skippedCount++;
-                skippedUsers.push(`<@${userId}> (Error)`); // [REVISI] Catat error
+                skippedUsers.push(`<@${userId}> (Error)`);
             }
         }
 
         // --- 3. Buat Respon Embed ---
+        // (Tidak ada perubahan di bagian ini, respon publik tetap menampilkan ID Discord)
         const embed = new EmbedBuilder()
             .setTitle(`✅ Batch ${action.charAt(0).toUpperCase() + action.slice(1)} Complete`)
             .setColor(embedColor)
             .addFields(
-                // [REVISI] Field count tetap ada sebagai ringkasan
                 { name: "Successfully Processed", value: `**${processedCount}** users`, inline: true },
                 { name: "Skipped", value: `**${skippedCount}** users`, inline: true },
                 { name: "Amount", value: `**${amount}**`, inline: true }
@@ -170,14 +171,12 @@ export async function execute(interaction) {
              embed.addFields({ name: "Reason", value: reason, inline: false });
         }
 
-        // [REVISI] Tambahkan field detail untuk user yang sukses
         let successText = successUsers.join("\n") || "None";
         if (successText.length > 1024) {
             successText = successText.substring(0, 1021) + "...";
         }
         embed.addFields({ name: `✅ Successfully Processed Users (${processedCount})`, value: successText, inline: false });
 
-        // [REVISI] Tambahkan field detail untuk user yang di-skip
         let skippedText = skippedUsers.join("\n") || "None";
         if (skippedText.length > 1024) {
             skippedText = skippedText.substring(0, 1021) + "...";
@@ -185,7 +184,6 @@ export async function execute(interaction) {
         embed.addFields({ name: `❌ Skipped Users (${skippedCount})`, value: skippedText, inline: false });
 
 
-        // Tambahkan info level up jika ada
         if (levelUpMessages.length > 0) {
             let levelUpText = levelUpMessages.join("\n");
             if (levelUpText.length > 1024) {
@@ -199,10 +197,21 @@ export async function execute(interaction) {
         await interaction.editReply({ embeds: [embed] });
 
         // --- 4. Kirim Log ---
-        // (Logika logging tidak perlu diubah, karena sudah cukup detail)
         try {
             const logChannel = interaction.guild.channels.cache.get(config.xpLogChannelId);
             if (logChannel) {
+                
+                // --- [PERUBAHAN] ---
+                // Buat daftar nama Roblox untuk log
+                let processedNamesText = successRobloxNames.join("\n");
+                if (processedNamesText.length > 1024) {
+                    processedNamesText = processedNamesText.substring(0, 1021) + "...";
+                }
+                if (!processedNamesText) {
+                    processedNamesText = "No users were processed.";
+                }
+                // --- [AKHIR PERUBAHAN] ---
+                
                 const logEmbed = new EmbedBuilder()
                     .setTitle(`📊 Batch ${action.charAt(0).toUpperCase() + action.slice(1)} Log`)
                     .setColor(embedColor)
@@ -211,7 +220,12 @@ export async function execute(interaction) {
                         { name: "Action", value: action, inline: true },
                         { name: "Amount", value: amount.toString(), inline: true },
                         { name: "Reason", value: reason, inline: false },
-                        { name: "Targets (Raw)", value: `\`\`\`${targetsString.substring(0, 1000)}\`\`\``, inline: false },
+                        
+                        // --- [PERUBAHAN] ---
+                        // Mengganti 'Targets (Raw)' dengan daftar nama Roblox yang diproses
+                        { name: `Processed Users (${successRobloxNames.length})`, value: `\`\`\`${processedNamesText}\`\`\``, inline: false },
+                        // --- [AKHIR PERUBAHAN] ---
+                        
                         { name: "Processed Count", value: processedCount.toString(), inline: true },
                         { name: "Skipped Count", value: skippedCount.toString(), inline: true }
                     )
