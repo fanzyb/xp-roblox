@@ -84,13 +84,16 @@ export async function execute(interaction) {
             return interaction.editReply({ content: "⚠️ No valid users or roles were found in the 'targets' input." });
         }
 
+        // --- [PERUBAHAN] Ambil log channel SEBELUM loop ---
+        const logChannel = interaction.guild.channels.cache.get(config.xpLogChannelId);
+
         // --- 2. Proses Setiap User ---
         let processedCount = 0;
         let skippedCount = 0;
         const levelUpMessages = [];
         const successUsers = [];
         const skippedUsers = [];
-        const successRobloxNames = []; // <-- [PERUBAHAN] Array baru untuk nama Roblox
+        // --- [PERUBAHAN] successRobloxNames DIBUANG ---
 
         for (const userId of targetUserIds) {
             try {
@@ -126,6 +129,37 @@ export async function execute(interaction) {
                 await saveUser(user);
                 const newLevel = getLevel(user.xp).levelName;
 
+                // --- [PERUBAHAN] Kirim log individual DI DALAM LOOP ---
+                if (logChannel) {
+                    try {
+                        const robloxName = user.robloxUsername || "";
+                        // Fallback yang kuat untuk nama roblox
+                        const cleanRobloxName = robloxName.trim() || "N/A";
+                        
+                        const logEmbed = new EmbedBuilder()
+                            .setTitle(`📊 Lunar Points Log (Batch ${action})`)
+                            .setColor(embedColor)
+                            .addFields(
+                                // Baris 1
+                                { name: "Action", value: action, inline: true },
+                                { name: "Amount", value: amount.toString(), inline: true },
+                                { name: "Target Discord", value: `<@${user.discordId}> (${member.user.tag})`, inline: true },
+                                // Baris 2
+                                { name: "Target Roblox", value: cleanRobloxName, inline: true },
+                                { name: "By", value: interaction.user.tag, inline: true },
+                                { name: "New Lunar Points", value: user.xp.toString(), inline: true },
+                                // Baris 3
+                                { name: "Reason", value: reason, inline: false }
+                            )
+                            .setTimestamp();
+                        await logChannel.send({ embeds: [logEmbed] });
+                    } catch (logErr) {
+                        console.warn(`[BATCH] Failed to send individual log for ${userId}:`, logErr);
+                    }
+                }
+                // --- [AKHIR PERUBAHAN] ---
+
+
                 if (newLevel !== oldLevel) {
                     const rankRole = await syncRankRole(member, user.xp);
                     if (rankRole) {
@@ -136,7 +170,8 @@ export async function execute(interaction) {
                 }
                 processedCount++;
                 successUsers.push(`<@${userId}>`);
-                successRobloxNames.push(user.robloxUsername); // <-- [PERUBAHAN] Simpan nama Roblox
+                
+                // --- [PERUBAHAN] Baris "successRobloxNames.push(...)" DIBUANG ---
 
             } catch (error) {
                 console.error(`[BATCH] Failed to process user ${userId}:`, error);
@@ -145,8 +180,7 @@ export async function execute(interaction) {
             }
         }
 
-        // --- 3. Buat Respon Embed ---
-        // (Tidak ada perubahan di bagian ini, respon publik tetap menampilkan ID Discord)
+        // --- 3. Buat Respon Embed Publik (INI TIDAK BERUBAH) ---
         const embed = new EmbedBuilder()
             .setTitle(`✅ Batch ${action.charAt(0).toUpperCase() + action.slice(1)} Complete`)
             .setColor(embedColor)
@@ -196,45 +230,7 @@ export async function execute(interaction) {
 
         await interaction.editReply({ embeds: [embed] });
 
-        // --- 4. Kirim Log ---
-        try {
-            const logChannel = interaction.guild.channels.cache.get(config.xpLogChannelId);
-            if (logChannel) {
-                
-                // --- [PERUBAHAN] ---
-                // Buat daftar nama Roblox untuk log
-                let processedNamesText = successRobloxNames.join("\n");
-                if (processedNamesText.length > 1024) {
-                    processedNamesText = processedNamesText.substring(0, 1021) + "...";
-                }
-                if (!processedNamesText) {
-                    processedNamesText = "No users were processed.";
-                }
-                // --- [AKHIR PERUBAHAN] ---
-                
-                const logEmbed = new EmbedBuilder()
-                    .setTitle(`📊 Batch ${action.charAt(0).toUpperCase() + action.slice(1)} Log`)
-                    .setColor(embedColor)
-                    .addFields(
-                        { name: "Admin", value: interaction.user.tag, inline: true },
-                        { name: "Action", value: action, inline: true },
-                        { name: "Amount", value: amount.toString(), inline: true },
-                        { name: "Reason", value: reason, inline: false },
-                        
-                        // --- [PERUBAHAN] ---
-                        // Mengganti 'Targets (Raw)' dengan daftar nama Roblox yang diproses
-                        { name: `Processed Users (${successRobloxNames.length})`, value: `\`\`\`${processedNamesText}\`\`\``, inline: false },
-                        // --- [AKHIR PERUBAHAN] ---
-                        
-                        { name: "Processed Count", value: processedCount.toString(), inline: true },
-                        { name: "Skipped Count", value: skippedCount.toString(), inline: true }
-                    )
-                    .setTimestamp();
-                await logChannel.send({ embeds: [logEmbed] });
-            }
-        } catch (logErr) {
-            console.error("Failed to send Batch XP log:", logErr);
-        }
+        // --- [PERUBAHAN] Blok "// --- 4. Kirim Log ---" DIBUANG TOTAL DARI SINI ---
 
     } catch (error) {
         logError(error, interaction, commandName);
