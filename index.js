@@ -12,51 +12,55 @@ import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import fetch from "node-fetch"; 
+import { randomUUID } from "crypto"; 
+
+// ==================================================================
+//  🤖 KONFIGURASI GEMINI AI (WAJIB DIISI)
+//  Paste API Key di sini.
+// ==================================================================
+const GEMINI_API_KEY = "PASTE_API_KEY_HERE"; 
+// ==================================================================
 
 // Import modules
-import config from "./src/config.json" with { type: "json" }; //
-import { getRobloxGroupData } from "./src/utils/helpers.js"; //
-import { handleComponentInteraction } from "./src/utils/components.js"; //
+import config from "./src/config.json" with { type: "json" };
+import { getRobloxGroupData, getLevel, syncRankRole, achievementsConfig, getRobloxUser } from "./src/utils/helpers.js"; 
+import { handleComponentInteraction } from "./src/utils/components.js"; 
 import { 
     getLastAnnouncedMilestone, 
-    setLastAnnouncedMilestone 
-} from "./src/db/firestore.js"; //
+    setLastAnnouncedMilestone,
+    findUserByDiscordId,
+    findUser,
+    saveUser,
+    saveWarning
+} from "./src/db/firestore.js"; 
+import { sendModLog } from "./src/utils/modLogger.js";
 
-// --- Handler Temp Voice ---
 import { handleTempVoiceInteraction, generateControlPanelEmbed } from "./src/utils/tempVoiceHandler.js";
-
-// --- [BARU] Handler Self Role ---
 import { handleSelfRoleMenu } from "./src/utils/selfRoleHandler.js";
-
-// Handler komponen lain
-import { handleComponent as verifyHandleComponent, handleModalSubmit as verifyHandleModal } from "./src/commands/verify.js"; //
+import { handleComponent as verifyHandleComponent, handleModalSubmit as verifyHandleModal } from "./src/commands/verify.js";
 import { handleTicketButton, handleTicketModal } from "./src/commands/ticket.js";
-import { handleModalSubmit as messageHandleModal } from "./src/commands/message.js"; //
+import { handleModalSubmit as messageHandleModal } from "./src/commands/message.js";
 
 dotenv.config();
-import "./src/db/firestore.js"; //
+import "./src/db/firestore.js"; 
 
-// --- [INTENT LENGKAP] ---
 const client = new Client({ 
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildModeration,
         GatewayIntentBits.GuildVoiceStates,
-        GatewayIntentBits.GuildMembers, // <-- Untuk Welcome & Audit
-        GatewayIntentBits.GuildMessages, // <-- Untuk Audit
-        GatewayIntentBits.MessageContent // <-- Untuk Audit
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent
     ],
-    partials: [
-        Partials.Message // <-- Untuk Audit
-    ]
+    partials: [Partials.Message]
 });
-// --- [AKHIR INTENT] ---
 
-// --- Command Handler Dinamis ---
+// --- Command Handler ---
 client.commands = new Collection();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
 const commandsPath = path.join(__dirname, "src", "commands");
 
 async function loadCommands(directory) {
@@ -64,392 +68,348 @@ async function loadCommands(directory) {
     for (const file of files) {
         const fullPath = path.join(directory, file);
         const stat = fs.statSync(fullPath);
-
-        if (stat.isDirectory()) {
-            await loadCommands(fullPath); 
-        } else if (file.endsWith(".js")) {
+        if (stat.isDirectory()) await loadCommands(fullPath); 
+        else if (file.endsWith(".js")) {
             const relativePath = path.relative(__dirname, fullPath).replace(/\\/g, '/');
             const command = await import(`./${relativePath}`); 
-            
             if (command.data && command.execute) {
                 client.commands.set(command.data.name, command);
                 console.log(`[CMD Load] Loaded: ${command.data.name}`);
-            } else {
-                console.warn(`[CMD Load] File ${fullPath} missing 'data' or 'execute'.`);
             }
         }
     }
 }
-// --- [AKHIR COMMAND HANDLER] ---
 
-
-// --- [MILESTONE DIKEMBALIKAN] ---
+// --- Milestone Checker ---
 async function checkMilestones() {
-    console.log("[MILESTONE] Checking Roblox group member count...");
     const groupData = await getRobloxGroupData(); 
-    if (!groupData || groupData.memberCount === 0) {
-        console.log("[MILESTONE] Failed to fetch group data.");
-        return;
-    }
+    if (!groupData || groupData.memberCount === 0) return;
     const currentMembers = groupData.memberCount;
     const lastAnnounced = await getLastAnnouncedMilestone(); 
     const milestones = config.memberCountMilestones || [];
-    let nextMilestone = 0;
-    for (const m of milestones) {
-        if (m > lastAnnounced) {
-            nextMilestone = m;
-            break;
-        }
-    }
-    if (nextMilestone === 0) {
-        console.log("[MILESTONE] No new milestones to check.");
-        return;
-    }
-    console.log(`[MILESTONE] Current members: ${currentMembers}, Next milestone: ${nextMilestone}`);
-    if (currentMembers >= nextMilestone) {
-        console.log(`[MILESTONE] 🎉 Milestone reached: ${nextMilestone}! Sending announcement...`);
+    const nextMilestone = milestones.find(m => m > lastAnnounced);
+    if (nextMilestone && currentMembers >= nextMilestone) {
         const channel = client.channels.cache.get(config.milestoneChannelId);
-        if (!channel) {
-            console.error(`[ERROR] Milestone channel with ID '${config.milestoneChannelId}' not found.`);
-            return;
-        }
-        const embed = new EmbedBuilder()
-            .setTitle("🎉 Community Milestone Reached! 🎉")
-            .setDescription(`## We've just hit **${nextMilestone.toLocaleString()}** members in our Roblox Group!`)
-            .setColor(config.embedColor || "#1B1464")
-            .setThumbnail(client.guilds.cache.first()?.iconURL() ?? null)
-            .addFields({ name: "Thank You!", value: "A huge thank you to every single member for being a part of our community. Let's aim for the next milestone!" })
-            .setTimestamp();
-        try {
-            await channel.send({ content: "WOW", embeds: [embed] });
-            await setLastAnnouncedMilestone(nextMilestone); 
-            console.log(`[MILESTONE] Announcement for ${nextMilestone} sent successfully.`);
-        } catch (e) {
-            console.error("Failed to send milestone announcement:", e);
+        if (channel) {
+            const embed = new EmbedBuilder()
+                .setTitle("🎉 Milestone Reached!")
+                .setDescription(`Hit **${nextMilestone.toLocaleString()}** members!`)
+                .setColor(config.embedColor || "#1B1464");
+            try { await channel.send({ content: "@everyone", embeds: [embed] }); await setLastAnnouncedMilestone(nextMilestone); } catch (e) {}
         }
     }
 }
-// --- [AKHIR MILESTONE] ---
 
-// ----------------- Event: ready -----------------
 client.on("clientReady", async () => {
     console.log(`✅ Logged in as ${client.user.tag}`);
-    const guild = client.guilds.cache.first();
-    if (!guild) {
-        console.error("Bot is not in any guild! Cannot initialize.");
-        return;
+    if (client.guilds.cache.size) await loadCommands(commandsPath);
+    checkMilestones(); setInterval(checkMilestones, 3600000);
+    setInterval(async () => { const d = await getRobloxGroupData(); client.user.setPresence({ activities: [{ name: `${d.name}: ${d.memberCount}`, type: 3 }] }); }, 600000);
+});
+
+client.on("interactionCreate", async (i) => {
+    try {
+        if (i.isStringSelectMenu()) { if (i.customId.startsWith('selfrole_')) return await handleSelfRoleMenu(i); if (i.customId.startsWith('reward_')) return await handleComponentInteraction(i); }
+        if (i.isButton()) { if (i.customId.startsWith('verify_')) return await verifyHandleComponent(i); if (i.customId.startsWith('lb_')) return await handleComponentInteraction(i); if (i.customId.startsWith('ticket_')) return await handleTicketButton(i); if (i.customId.startsWith('tv_')) return await handleTempVoiceInteraction(i); }
+        if (i.isModalSubmit()) { if (i.customId === 'verify_modal_submit') return await verifyHandleModal(i); if (i.customId === 'send_message_modal') return await messageHandleModal(i); if (i.customId.startsWith('ticket_')) return await handleTicketModal(i); if (i.customId.startsWith('tv_')) return await handleTempVoiceInteraction(i); }
+        if (i.isChatInputCommand()) await client.commands.get(i.commandName)?.execute(i);
+    } catch (e) { console.error(e); }
+});
+
+// Temp Voice & Logs
+const tempCreations = new Set();
+client.on("voiceStateUpdate", async (o, n) => {
+    if (n.channelId === config.tempVoiceCreateChannelId && !tempCreations.has(n.member.id)) {
+        tempCreations.add(n.member.id); try { const c = await n.guild.channels.create({name: `${n.member.user.username}'s Channel`, type: 2, parent: config.tempVoiceCategoryId, permissionOverwrites: [{id: n.member.id, allow: [16n]}]}); await n.member.voice.setChannel(c); c.send(generateControlPanelEmbed()); } catch{} finally { tempCreations.delete(n.member.id); }
     }
-    console.log("Loading commands...");
-    await loadCommands(commandsPath);
+    if (o.channel?.members.size===0 && o.channel.parentId===config.tempVoiceCategoryId && o.channelId!==config.tempVoiceCreateChannelId) try{await o.channel.delete()}catch{}
+});
+client.on("guildMemberAdd", m => { if(!m.user.bot && m.guild.id===config.guildId) m.guild.channels.cache.get(config.welcomeChannelIds?.[0])?.send(`Welcome <@${m.id}>!`); });
+const audit = (g,e) => g.channels.cache.get(config.auditLogChannelId)?.send({embeds:[e]}).catch(()=>{});
+client.on("guildMemberRemove", m => { if(m.guild.id===config.guildId) audit(m.guild, new EmbedBuilder().setTitle("Left").setDescription(m.user.tag).setColor("Red")); });
+client.on("messageDelete", m => { if(!m.partial && m.guild.id===config.guildId) audit(m.guild, new EmbedBuilder().setTitle("Deleted").setDescription(m.content).setColor("Orange")); });
+
+// Load Manual Book
+let manualBookContent = "";
+try { manualBookContent = fs.readFileSync("./manual_book.txt", "utf8"); } catch (err) { manualBookContent = "Gunakan pengetahuan umum."; }
+
+// =====================================================
+//  🛠️ SUPER TOOLS
+// =====================================================
+const GEMINI_TOOLS = [
+    {
+        function_declarations: [
+            {
+                name: "manage_xp_roblox",
+                description: "Manage XP using Roblox Usernames. Call this when user provides a list of Roblox names (e.g. from screenshot).",
+                parameters: {
+                    type: "OBJECT",
+                    properties: {
+                        action: { type: "STRING", enum: ["add", "remove", "set", "bonus"] },
+                        roblox_usernames: { 
+                            type: "ARRAY", 
+                            items: { type: "STRING" },
+                            description: "List of PURE Roblox Usernames (without '@'). Example: ['Builderman', 'Roblox'] not ['@Builderman']." 
+                        },
+                        amount: { type: "INTEGER" },
+                        reason: { type: "STRING" }
+                    },
+                    required: ["action", "roblox_usernames", "amount"]
+                }
+            }
+        ]
+    },
+    {
+        function_declarations: [
+            {
+                name: "manage_xp_discord",
+                description: "Manage XP using Discord Mentions/IDs.",
+                parameters: {
+                    type: "OBJECT",
+                    properties: {
+                        action: { type: "STRING", enum: ["add", "remove", "set", "bonus"] },
+                        user_ids: { type: "ARRAY", items: { type: "STRING" } },
+                        amount: { type: "INTEGER" },
+                        reason: { type: "STRING" }
+                    },
+                    required: ["action", "user_ids", "amount"]
+                }
+            }
+        ]
+    },
+    { function_declarations: [{ name: "manage_moderation", description: "Warn/Mute.", parameters: { type: "OBJECT", properties: { action: { type: "STRING", enum: ["warn", "mute"] }, user_id: { type: "STRING" }, reason: { type: "STRING" }, duration_minutes: { type: "INTEGER" } }, required: ["action", "user_id", "reason"] } }] },
+    { function_declarations: [{ name: "manage_reward", description: "Give/Remove achievement.", parameters: { type: "OBJECT", properties: { action: { type: "STRING", enum: ["give", "remove"] }, user_id: { type: "STRING" }, achievement_name_keyword: { type: "STRING" } }, required: ["action", "user_id", "achievement_name_keyword"] } }] }
+];
+
+// ==========================================
+//  🤖 GEMINI AI HANDLER
+// ==========================================
+async function askGemini(prompt, history = [], message, imagePart = null) {
+    let apiKey = GEMINI_API_KEY;
+    if (!apiKey || apiKey.includes("MASUKKAN_KEY")) return "❌ **Config Error:** API Key kosong!";
+    apiKey = apiKey.trim();
+
+    const modelName = "gemini-2.5-flash"; 
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
     
-    async function updatePresence() {
-        const groupData = await getRobloxGroupData(); 
-        const newStatus = `${groupData.name} with ${groupData.memberCount.toLocaleString()} Members`;
-        client.user.setPresence({
-            activities: [{ name: newStatus, type: 3 }],
-            status: "online"
-        });
-        console.log(`Presence updated: ${newStatus}`);
-    }
-    updatePresence();
-    setInterval(updatePresence, 1000 * 60 * 10);
-    
-    const commandsToDeploy = client.commands.map(cmd => cmd.data);
-    if (guild) {
-        await guild.commands.set(commandsToDeploy);
-        console.log(`✅ ${commandsToDeploy.length} commands registered locally on ${guild.name}`);
+    const isInterviewChannel = message.channel.name.toLowerCase().includes("interview");
+    let systemPrompt = "";
+
+    if (isInterviewChannel) {
+        systemPrompt = `ROLE: Senior Guide Interviewer.\nMANUAL: """${manualBookContent}"""\nRULES: Max 5 questions. One by one. Stop if pass/fail. JAWAB DALAM BAHASA INDONESIA.`;
     } else {
-        await client.application.commands.set(commandsToDeploy);
-        console.log(`✅ ${commandsToDeploy.length} commands registered globally`);
-    }
-
-    // --- [MILESTONE DIKEMBALIKAN] ---
-    checkMilestones();
-    setInterval(checkMilestones, 1000 * 60 * 60);
-    // --- [AKHIR MILESTONE] ---
-});
-
-// ----------------- Event: interactionCreate -----------------
-client.on("interactionCreate", async (interaction) => {
-    try {
-        // --- Handler komponen (Button/Modal/Select) ---
-        if (interaction.isStringSelectMenu()) { 
-            if (interaction.customId.startsWith('selfrole_menu_')) {
-                return await handleSelfRoleMenu(interaction);
-            }
-            if (interaction.customId.startsWith('reward_')) { //
-                return await handleComponentInteraction(interaction);
-            }
-        }
+        // --- [UPDATE PROMPT AGAR LEBIH PINTAR BACA GAMBAR] ---
+        systemPrompt = `
+        ROLE: Kamu adalah AI Admin & Asisten Komunitas 'Mooncrest Expedition'.
         
-        if (interaction.isButton()) {
-            if (interaction.customId.startsWith('verify_')) {
-                return await verifyHandleComponent(interaction);
-            }
-            if (interaction.customId.startsWith('lb_')) { //
-                return await handleComponentInteraction(interaction);
-            }
-            if (interaction.customId.startsWith('ticket_')) {
-                return await handleTicketButton(interaction);
-            }
-            if (interaction.customId.startsWith('tv_')) {
-                return await handleTempVoiceInteraction(interaction);
-            }
-            return;
-        }
+        ATURAN UTAMA (BAHASA):
+        - JIKA user chat Bahasa Indonesia -> JAWAB INDONESIA.
+        - JIKA user chat English -> Answer English.
+        - JIKA user chat campur -> Jawab santai (gaul).
 
-        if (interaction.isModalSubmit()) {
-            if (interaction.customId === 'verify_modal_submit') {
-                return await verifyHandleModal(interaction);
-            }
-            if (interaction.customId === 'send_message_modal') {
-                return await messageHandleModal(interaction);
-            }
-            if (interaction.customId.startsWith('ticket_')) {
-                return await handleTicketModal(interaction);
-            }
-            if (interaction.customId.startsWith('tv_')) {
-                return await handleTempVoiceInteraction(interaction);
-            }
-            return;
-        }
-        // --- (Akhir handler komponen) ---
+        ATURAN BACA GAMBAR ROBLOX (PENTING):
+        1. Di Roblox, Username asli SELALU diawali tanda '@' (Contoh: @Ryunesse).
+        2. Teks yang TIDAK ada '@' biasanya cuma Display Name (Contoh: Ryun). Display Name BISA SAMA, Username UNIK.
+        3. TUGAS KAMU: Cari teks yang ada '@' nya. Ambil teks setelah '@' sebagai Username.
+        4. CONTOH: Gambar ada tulisan "Ryun (@Ryunesse)". Maka Username = "Ryunesse". Display Name = "Ryun".
+        5. SAAT KONFIRMASI KE USER: Tulis formatnya: "@Username (Display Name)".
+        6. SAAT PANGGIL TOOL 'manage_xp_roblox': Kirim Username TANPA tanda '@'.
 
-
-        if (!interaction.isChatInputCommand()) return;
-
-        // --- Eksekusi command ---
-        const command = client.commands.get(interaction.commandName);
-        if (!command) {
-            console.error(`No command matching ${interaction.commandName} was found.`);
-            await interaction.reply({ content: "❌ Unknown command.", flags: 64 });
-            return;
-        }
-
-        await command.execute(interaction);
-        // --- (Akhir eksekusi command) ---
-
-    } catch (err) {
-        console.error("Interaction handler error:", err);
-        const replyOptions = { content: "❌ An error occurred while executing this command.", flags: 64 };
-        if (interaction.replied || interaction.deferred) {
-            try { await interaction.editReply(replyOptions); } catch {}
-        } else {
-            try { await interaction.reply(replyOptions); } catch {}
-        }
+        ATURAN LAIN:
+        - Jika user minta add XP, panggil tool yang sesuai.
+        - Hanya user VERIFIED yang bisa dapat XP (Tool akan mengeceknya).
+        `;
     }
-});
 
+    const contents = history.map(h => ({ role: h.role === "bot" ? "model" : "user", parts: [{ text: h.message }] }));
+    const userParts = [{ text: prompt }];
+    if (imagePart) { userParts.push(imagePart); userParts[0].text += "\n[System: Image attached. Please analyze Roblox Leaderboard/Player List.]"; }
+    contents.push({ role: "user", parts: userParts });
 
-// --- Handler Temp Voice ---
-const tempChannelCreations = new Set();
-client.on("voiceStateUpdate", async (oldState, newState) => {
-    const { member, guild } = newState;
-    const oldChannel = oldState.channel;
-    const newChannel = newState.channel;
-    const createChannelId = config.tempVoiceCreateChannelId;
-    const categoryId = config.tempVoiceCategoryId;
-    if (!categoryId || !createChannelId) return;
-    if (newChannel && newChannel.id === createChannelId) {
-        if (tempChannelCreations.has(member.id)) return;
-        tempChannelCreations.add(member.id);
-        try {
-            const channelName = `${member.user.username}'s Channel`;
-            const tempChannel = await guild.channels.create({
-                name: channelName,
-                type: ChannelType.GuildVoice,
-                parent: categoryId,
-                permissionOverwrites: [
-                    { id: guild.roles.everyone, allow: [PermissionFlagsBits.Connect, PermissionFlagsBits.ViewChannel] },
-                    { id: member.id, allow: [PermissionFlagsBits.ManageChannels, PermissionFlagsBits.MoveMembers, PermissionFlagsBits.ManageRoles] }
-                ]
-            });
-            if (newState.channel) {
-                await member.voice.setChannel(tempChannel);
-                const panel = generateControlPanelEmbed();
-                await tempChannel.send(panel);
-                const dmEmbed = new EmbedBuilder()
-                    .setColor(config.embedColor)
-                    .setTitle("Your Temporary Channel is Ready!")
-                    .setDescription(`We have successfully created your temporary voice channel: **${tempChannel.name}**.\n\nYou can manage it using the buttons in the channel chat or in the <#${config.tempVoiceControlChannelId}> channel.`)
-                    .setFooter({ text: "This channel will be automatically deleted when empty." });
-                await member.send({ embeds: [dmEmbed] }).catch(err => {
-                    console.warn(`[TempVoice] Failed to send DM to ${member.user.tag}: ${err.message}`);
-                });
-            }
-        } catch (err) {
-            console.error("[TempVoice] Error creating channel:", err);
-        } finally {
-            tempChannelCreations.delete(member.id);
-        }
-    }
-    if (oldChannel && oldChannel.parentId === categoryId && oldChannel.id !== createChannelId && oldChannel.members.size === 0) {
-        try {
-            await oldChannel.delete("Temporary channel is now empty.");
-        } catch (err) {
-            console.error("[TempVoice] Error deleting channel:", err);
-        }
-    }
-});
-
-
-// --- [WELCOME MESSAGE DIKEMBALIKAN + IGNORE BOT] ---
-client.on("guildMemberAdd", async (member) => {
-    
-    // --- [PERMINTAAN BARU: IGNORE BOT] ---
-    if (member.user.bot) {
-        console.log(`[WELCOME DEBUG] Event diabaikan: User adalah bot (${member.user.tag})`);
-        return;
-    }
-    // --- [AKHIR PERMINTAAN BARU] ---
-    
-    console.log(`[WELCOME DEBUG] Event 'guildMemberAdd' TERPICU. User: ${member.user.tag} (${member.id})`);
-
-    if (member.guild.id !== config.guildId) {
-        console.log(`[WELCOME DEBUG] Event diabaikan: Guild ID tidak cocok (${member.guild.id} !== ${config.guildId})`);
-        return;
-    }
-    const channelIds = config.welcomeChannelIds;
-    if (!channelIds || channelIds.length === 0) {
-        console.log("[WELCOME DEBUG] Event diabaikan: 'welcomeChannelIds' tidak ada atau kosong di config.json.");
-        return;
-    }
-    const welcomeDescription = 
-        `- Please read <#1412676765553524746>\n` +
-        `- Check <#1418312135569576028> to get your preferred role.\n` +
-        `- And don't forget to verify at <#1412685158829785118> so we can recognize you.\n\n` +
-        `I hope you enjoy your time in our community.`;
-    const welcomeEmbed = new EmbedBuilder()
-        .setTitle(`Welcome to ${member.guild.name}!`)
-        .setDescription(welcomeDescription)
-        .setColor(config.embedColor || "#1B1464")
-        .setThumbnail(member.user.displayAvatarURL())
-        .setImage("https://cdn.discordapp.com/attachments/1435964396408148088/1435964470223441970/welcome.png?ex=69112d60&is=690fdbe0&hm=c26fc9f6548e13fb49b324b3bc52e33c37ae92e3a183cc3af8916692e676f092") // <-- GANTI DENGAN URL GAMBARMU
-        .setTimestamp();
-    const welcomeMessage = {
-        content: `Hi <@${member.id}>, Welcome to Mooncrest Expedition.`,
-        embeds: [welcomeEmbed]
-    };
-    console.log(`[WELCOME DEBUG] Mencoba mengirim pesan ke ${channelIds.length} channel...`);
-    for (const id of channelIds) {
-        const channel = member.guild.channels.cache.get(id);
-        if (channel) {
-            try {
-                await channel.send(welcomeMessage);
-                console.log(`[WELCOME DEBUG] SUKSES mengirim pesan ke channel ${id}`);
-            } catch (err) {
-                console.error(`[WELCOME DEBUG] GAGAL mengirim ke channel ${id}: ${err.message}`);
-            }
-        } else {
-            console.warn(`[WELCOME DEBUG] Channel ID ${id} tidak ditemukan.`);
-        }
-    }
-});
-// --- [AKHIR WELCOME] ---
-
-
-// --- [HANDLER AUDIT LOGS] ---
-async function sendAuditLog(guild, embed) {
-    const channelId = config.auditLogChannelId;
-    if (!channelId) return;
     try {
-        const channel = await guild.channels.fetch(channelId);
-        if (channel && channel.isTextBased()) {
-            await channel.send({ embeds: [embed] });
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: contents, tools: isInterviewChannel ? [] : GEMINI_TOOLS, systemInstruction: { parts: [{ text: systemPrompt }] } })
+        });
+
+        if (!response.ok) {
+            const errText = await response.text();
+            return `⚠️ API Error ${response.status}: ${errText}`;
         }
-    } catch (err) {
-        console.error(`[AuditLog] Failed to send log: ${err.message}`);
+
+        const data = await response.json();
+        const candidate = data.candidates?.[0];
+        if (!candidate) return "🤔 (No Response)";
+
+        const functionCalls = candidate.content?.parts?.filter(part => part.functionCall);
+        if (functionCalls && functionCalls.length > 0) {
+            let resultLog = [];
+            for (const callPart of functionCalls) {
+                const fn = callPart.functionCall;
+                const args = fn.args;
+                
+                if (fn.name === "manage_xp_roblox") resultLog.push(await performBatchXpRoblox(args, message));
+                else if (fn.name === "manage_xp_discord") resultLog.push(await performBatchXpDiscord(args, message));
+                else if (fn.name === "manage_moderation") resultLog.push(await performModeration(args, message));
+                else if (fn.name === "manage_reward") resultLog.push(await performReward(args, message));
+            }
+            return resultLog.join("\n\n");
+        }
+
+        return candidate.content?.parts?.[0]?.text || "";
+
+    } catch (error) {
+        console.error("[Gemini Error]", error);
+        return "❌ System Error.";
     }
 }
-client.on("guildMemberRemove", async (member) => {
-    if (member.guild.id !== config.guildId) return;
-    if (member.user.bot) return; 
-    const embed = new EmbedBuilder()
-        .setAuthor({ name: member.user.tag, iconURL: member.user.displayAvatarURL() })
-        .setFooter({ text: `User ID: ${member.id}` })
-        .setTimestamp();
-    await new Promise(resolve => setTimeout(resolve, 1000)); 
-    const banLog = await member.guild.fetchAuditLogs({
-        type: AuditLogEvent.MemberBanAdd,
-        limit: 1
-    }).catch(() => null);
-    if (banLog && banLog.entries.first()?.target.id === member.id) {
-        const entry = banLog.entries.first();
-        embed.setColor("#FF0000")
-             .setTitle("Member Banned")
-             .setDescription(`${member.user} was banned.`)
-             .addFields(
-                 { name: "Moderator", value: `${entry.executor}` },
-                 { name: "Reason", value: entry.reason || "No reason provided." }
-             );
-        return sendAuditLog(member.guild, embed);
-    }
-    const kickLog = await member.guild.fetchAuditLogs({
-        type: AuditLogEvent.MemberKick,
-        limit: 1
-    }).catch(() => null);
-    if (kickLog && kickLog.entries.first()?.target.id === member.id) {
-        const entry = kickLog.entries.first();
-        embed.setColor("#FFA500")
-             .setTitle("Member Kicked")
-             .setDescription(`${member.user} was kicked.`)
-             .addFields(
-                 { name: "Moderator", value: `${entry.executor}` },
-                 { name: "Reason", value: entry.reason || "No reason provided." }
-             );
-        return sendAuditLog(member.guild, embed);
-    }
-    embed.setColor("#F0E68C")
-         .setTitle("Member Left")
-         .setDescription(`${member.user} left the server.`);
-    return sendAuditLog(member.guild, embed);
-});
-client.on("guildMemberUpdate", async (oldMember, newMember) => {
-    if (newMember.guild.id !== config.guildId) return;
-    if (newMember.user.bot) return; 
-    const oldRoles = oldMember.roles.cache;
-    const newRoles = newMember.roles.cache;
-    if (oldRoles.size === newRoles.size) return; 
-    const addedRoles = newRoles.filter(role => !oldRoles.has(role.id));
-    const removedRoles = oldRoles.filter(role => !newRoles.has(role.id));
-    if (addedRoles.size === 0 && removedRoles.size === 0) return; 
-    const embed = new EmbedBuilder()
-        .setColor("#00BFFF")
-        .setAuthor({ name: newMember.user.tag, iconURL: newMember.user.displayAvatarURL() })
-        .setTitle("Member Roles Updated")
-        .setTimestamp()
-        .setFooter({ text: `User ID: ${newMember.id}` });
-    if (addedRoles.size > 0) {
-        embed.addFields({ name: "Roles Added", value: addedRoles.map(r => r.name).join(", ") });
-    }
-    if (removedRoles.size > 0) {
-        embed.addFields({ name: "Roles Removed", value: removedRoles.map(r => r.name).join(", ") });
-    }
-    return sendAuditLog(newMember.guild, embed);
-});
-client.on("messageDelete", async (message) => {
-    if (message.partial) {
-        const embed = new EmbedBuilder()
-            .setColor("#9932CC")
-            .setTitle("Old Message Deleted")
-            .setDescription(`An uncached message was deleted in ${message.channel}.`)
-            .setTimestamp();
-        return sendAuditLog(message.guild, embed);
-    }
-    if (message.guild.id !== config.guildId) return;
-    if (message.author.bot) return; 
-    const embed = new EmbedBuilder()
-        .setColor("#9932CC")
-        .setTitle("Message Deleted")
-        .setAuthor({ name: message.author.tag, iconURL: message.author.displayAvatarURL() })
-        .setDescription(`Message sent by ${message.author} deleted in ${message.channel}.`)
-        .addFields({ name: "Content", value: message.content || "No content (e.g., embed or image)." })
-        .setTimestamp()
-        .setFooter({ text: `Author ID: ${message.author.id} | Msg ID: ${message.id}` });
-    return sendAuditLog(message.guild, embed);
-});
-// --- [AKHIR AUDIT LOGS] ---
 
+// --- EKSEKUTOR ROBLOX USERNAME (LOGGED) ---
+async function performBatchXpRoblox(args, message) {
+    const { action, roblox_usernames, amount, reason } = args;
+    if (!roblox_usernames?.length) return "⚠️ No usernames detected.";
+    
+    const member = message.member;
+    const allowed = config.xpManagerRoles || [];
+    if (!member.permissions.has(PermissionFlagsBits.Administrator) && !member.roles.cache.some(r => allowed.includes(r.id))) return `⛔ No Permission.`;
 
-// ----------------- Login -----------------
-client.login(process.env.TOKEN).catch(err => console.error("Login error:", err));
+    let success = [], notFound = [];
+    for (let name of roblox_usernames) {
+        // Bersihkan @ kalau AI lupa hapus
+        name = name.replace("@", "").trim();
+        
+        try {
+            const rData = await getRobloxUser(name);
+            if (!rData) { notFound.push(name); continue; }
+            let user = await findUser(rData.id.toString());
+            if (!user) { notFound.push(`${name} (Unverified)`); continue; }
+            
+            const oldLvl = getLevel(user.xp).levelName;
+            if (action === "add") { user.xp += amount; user.expeditions++; }
+            else if (action === "remove") { user.xp = Math.max(user.xp-amount,0); user.expeditions = Math.max(user.expeditions-1,0); }
+            else if (action === "set") user.xp = amount;
+            else if (action === "bonus") user.xp += amount;
+            
+            await saveUser(user); success.push(user.robloxUsername);
+            if (user.discordId && getLevel(user.xp).levelName !== oldLvl) { const gm = await message.guild.members.fetch(user.discordId).catch(()=>{}); if(gm) await syncRankRole(gm, user.xp); }
+        } catch { notFound.push(name); }
+    }
+
+    // Log ke Channel
+    const logChannel = message.guild.channels.cache.get(config.xpLogChannelId);
+    if (logChannel && success.length > 0) {
+        logChannel.send({ embeds: [new EmbedBuilder().setTitle(`🤖 AI XP Log (${action.toUpperCase()})`).setDescription(`**Target:** ${success.join(", ")}\n**Amount:** ${amount}\n**Reason:** ${reason||"-"}`).setColor(config.embedColor||"Green").setFooter({text:`By ${message.author.tag}`}).setTimestamp()] }).catch(()=>{});
+    }
+
+    let reply = `✅ **AI Action:** ${action} ${amount} XP ke **${success.length}** user.`;
+    if (success.length) reply += `\n✅ **Sukses:** ${success.join(", ")}`;
+    if (notFound.length) reply += `\n⚠️ **Gagal/Unverified:** ${notFound.join(", ")}`;
+    return reply;
+}
+
+// --- EKSEKUTOR DISCORD MENTION (LOGGED) ---
+async function performBatchXpDiscord(args, message) {
+    const { action, user_ids, amount, reason } = args;
+    if (!user_ids?.length) return "⚠️ No users.";
+    const member = message.member;
+    const allowed = config.xpManagerRoles || [];
+    if (!member.permissions.has(PermissionFlagsBits.Administrator) && !member.roles.cache.some(r => allowed.includes(r.id))) return `⛔ No Permission.`;
+
+    let names = [];
+    for (const uid of user_ids) {
+        try {
+            const userDb = await findUserByDiscordId(uid);
+            if (!userDb || !userDb.isVerified) continue;
+            let user = userDb;
+            const oldLvl = getLevel(user.xp).levelName;
+            if (action === "add") { user.xp += amount; user.expeditions++; }
+            else if (action === "remove") { user.xp = Math.max(user.xp-amount,0); user.expeditions = Math.max(user.expeditions-1,0); }
+            else if (action === "set") user.xp = amount;
+            else if (action === "bonus") user.xp += amount;
+            await saveUser(user); names.push(user.robloxUsername);
+            if (getLevel(user.xp).levelName !== oldLvl) { const gm = await message.guild.members.fetch(uid).catch(()=>{}); if(gm) await syncRankRole(gm, user.xp); }
+        } catch {}
+    }
+
+    // Log ke Channel
+    const logChannel = message.guild.channels.cache.get(config.xpLogChannelId);
+    if (logChannel && names.length > 0) {
+        logChannel.send({ embeds: [new EmbedBuilder().setTitle(`🤖 AI XP Log (${action.toUpperCase()})`).setDescription(`**Target:** ${names.join(", ")}\n**Amount:** ${amount}\n**Reason:** ${reason||"-"}`).setColor(config.embedColor||"Green").setFooter({text:`By ${message.author.tag}`}).setTimestamp()] }).catch(()=>{});
+    }
+
+    return `✅ **AI Action:** ${action} ${amount} XP ke ${names.join(", ")}.`;
+}
+
+async function performModeration(args, message) {
+    const { action, user_id, reason, duration_minutes } = args;
+    if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) return `⛔ No Permission.`;
+    const target = await message.guild.members.fetch(user_id).catch(() => null);
+    if (!target) return "⚠️ User not found.";
+    if (action === "warn") {
+        const cid = randomUUID().substring(0, 8); await saveWarning(target.id, message.guild.id, message.author.id, reason, cid);
+        target.send(`⚠️ Warned: ${reason}`).catch(()=>{}); sendModLog(message.guild, "Warned (AI)", "Yellow", target.user, message.author, reason, [{name:"Case",value:cid}]);
+        return `🛡️ Warned ${target.user.tag}.`;
+    }
+    if (action === "mute") {
+        const mins = duration_minutes || 10; try { await target.timeout(mins*60000, reason); sendModLog(message.guild, "Muted (AI)", "Orange", target.user, message.author, reason, [{name:"Time",value:`${mins}m`}]); return `🔇 Muted ${target.user.tag}.`; } catch { return "❌ Failed mute."; }
+    }
+}
+async function performReward(args, message) {
+    const { action, user_id, achievement_name_keyword } = args;
+    const allowed = config.rewardManagerRoles || [];
+    if (!message.member.permissions.has(PermissionFlagsBits.Administrator) && !message.member.roles.cache.some(r => allowed.includes(r.id))) return `⛔ No Permission.`;
+    const userDb = await findUserByDiscordId(user_id); if (!userDb) return "⚠️ User not verified.";
+    const achv = achievementsConfig.find(a => a.name.toLowerCase().includes(achievement_name_keyword.toLowerCase())); if (!achv) return "⚠️ Achv not found.";
+    let user = userDb;
+    if (action === "give") { if (!user.achievements.includes(achv.id)) { user.achievements.push(achv.id); await saveUser(user); if (achv.roleId) message.guild.members.fetch(user_id).then(m=>m.roles.add(achv.roleId)).catch(()=>{}); return `🏆 Given ${achv.name}`; } return "ℹ️ Had it."; }
+    else { user.achievements = user.achievements.filter(id => id !== achv.id); await saveUser(user); if (achv.roleId) message.guild.members.fetch(user_id).then(m=>m.roles.remove(achv.roleId)).catch(()=>{}); return `🗑️ Removed ${achv.name}`; }
+}
+
+// --- Event Listener Chat AI ---
+client.on("messageCreate", async (message) => {
+    if (message.author.bot) return;
+
+    const isInterview = message.channel.name.toLowerCase().includes("interview");
+    let isReply = false;
+    if (message.reference) { try { const ref = await message.fetchReference(); if (ref.author.id === client.user.id) isReply = true; } catch {} }
+    const hasPrefix = message.content.toLowerCase().startsWith("!ai");
+    const hasImage = message.attachments.size > 0;
+
+    if (hasPrefix || isReply || (isInterview && !message.content.startsWith("//")) || (hasImage && (hasPrefix || isReply))) {
+        await message.channel.sendTyping();
+        
+        let prompt = message.content;
+        if (hasPrefix) prompt = prompt.slice(3).trim();
+        if (!prompt && !hasImage && !isInterview) return message.reply("?");
+
+        let history = [];
+        const limit = isInterview ? 20 : 15; 
+        try {
+            const msgs = await message.channel.messages.fetch({ limit: limit + 1 });
+            msgs.reverse().forEach(m => {
+                if (m.id !== message.id && !m.content.startsWith("//") && !m.content.startsWith("!ai")) {
+                    history.push({ role: m.author.id === client.user.id ? "bot" : "user", message: m.content });
+                }
+            });
+        } catch {}
+
+        let imagePart = null;
+        if (hasImage) {
+            try {
+                const imgUrl = message.attachments.first().url;
+                const imgRes = await fetch(imgUrl);
+                const imgBuf = await imgRes.arrayBuffer();
+                imagePart = { inline_data: { mime_type: message.attachments.first().contentType || "image/png", data: Buffer.from(imgBuf).toString("base64") } };
+            } catch (e) { console.error("Image fail:", e); }
+        }
+
+        const ans = await askGemini(prompt, history, message, imagePart);
+        if (ans) {
+            const chunks = ans.match(/[\s\S]{1,1900}/g) || [];
+            for (const c of chunks) await message.reply(c);
+        }
+    }
+});
+
+client.login(process.env.TOKEN).catch(console.error);
