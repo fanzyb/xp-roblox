@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, PermissionFlagsBits, ActionRowBuilder, StringSelectMenuBuilder } from "discord.js";
-import { getRobloxUser, achievementsConfig } from "../utils/helpers.js";
-import { findUser } from "../db/firestore.js";
+import { achievementsConfig } from "../utils/helpers.js";
+import { findUserByDiscordId } from "../db/firestore.js"; // Ganti findUser dengan ini
 import config from "../config.json" with { type: "json" };
 
 export const data = new SlashCommandBuilder()
@@ -10,12 +10,12 @@ export const data = new SlashCommandBuilder()
     .addSubcommand(sub =>
         sub.setName("add")
             .setDescription("Give an achievement to a user")
-            .addStringOption(opt => opt.setName("username").setDescription("Roblox username").setRequired(true))
+            .addUserOption(opt => opt.setName("target").setDescription("The verified Discord user").setRequired(true))
     )
     .addSubcommand(sub =>
         sub.setName("remove")
             .setDescription("Remove an achievement from a user")
-            .addStringOption(opt => opt.setName("username").setDescription("Roblox username").setRequired(true))
+            .addUserOption(opt => opt.setName("target").setDescription("The verified Discord user").setRequired(true))
     );
 
 export async function execute(interaction) {
@@ -25,16 +25,20 @@ export async function execute(interaction) {
     if (!allowed) return interaction.reply({ content: "❌ You do not have permission to use this command.", ephemeral: true });
 
     const sub = interaction.options.getSubcommand();
-    const username = interaction.options.getString("username");
+    const targetMember = interaction.options.getMember("target");
 
     await interaction.deferReply({ ephemeral: true });
 
-    const robloxData = await getRobloxUser(username);
-    if (!robloxData) return interaction.editReply({ content: "⚠️ Roblox user not found." });
+    // Cari data user berdasarkan Discord ID
+    const user = await findUserByDiscordId(targetMember.id);
 
-    let user = await findUser(robloxData.id.toString());
-    if (!user) user = { robloxId: robloxData.id.toString(), robloxUsername: robloxData.name, xp: 0, expeditions: 0, achievements: [] };
+    if (!user || !user.isVerified) {
+        return interaction.editReply({ content: `❌ User <@${targetMember.id}> is not linked to a Roblox account. They need to use \`/verify\` first.` });
+    }
 
+    // Gunakan ID Discord di customId agar handler bisa memberikan Role nanti
+    // Format: reward_add:DISCORD_ID
+    const customIdSuffix = targetMember.id; 
 
     if (sub === "add") {
         const currentAchvIds = user.achievements || [];
@@ -42,7 +46,7 @@ export async function execute(interaction) {
         const filteredAchvs = achievementsConfig.filter(a => !currentAchvIds.includes(a.id));
 
         if (!filteredAchvs.length) {
-            return interaction.editReply({ content: `✅ **${robloxData.name}** already has all available achievements.` });
+            return interaction.editReply({ content: `✅ **${user.robloxUsername}** already has all available achievements.` });
         }
 
         const options = filteredAchvs.map(a => ({
@@ -50,16 +54,20 @@ export async function execute(interaction) {
             description: a.description || "—",
             value: String(a.id)
         }));
+
         const menu = new StringSelectMenuBuilder()
-            .setCustomId(`reward_add:${encodeURIComponent(robloxData.name)}`)
+            .setCustomId(`reward_add:${customIdSuffix}`)
             .setPlaceholder("Select achievement to add")
             .addOptions(options);
+            
         const row = new ActionRowBuilder().addComponents(menu);
-        return interaction.editReply({ content: `🎖 Select achievement to give to **${robloxData.name}**`, components: [row] });
+        return interaction.editReply({ content: `🎖 Select achievement to give to **${user.robloxUsername}** (<@${targetMember.id}>)`, components: [row] });
     }
 
     if (sub === "remove") {
-        if (!user.achievements.length) return interaction.editReply({ content: "⚠️ User has no achievements." });
+        if (!user.achievements || !user.achievements.length) {
+            return interaction.editReply({ content: "⚠️ User has no achievements." });
+        }
 
         const options = (user.achievements || [])
             .map(id => achievementsConfig.find(a => a.id === id))
@@ -69,10 +77,11 @@ export async function execute(interaction) {
         if (!options.length) return interaction.editReply({ content: "⚠️ No known achievements to remove for this user." });
 
         const menu = new StringSelectMenuBuilder()
-            .setCustomId(`reward_remove:${encodeURIComponent(robloxData.name)}`)
+            .setCustomId(`reward_remove:${customIdSuffix}`)
             .setPlaceholder("Select achievement to remove")
             .addOptions(options);
+            
         const row = new ActionRowBuilder().addComponents(menu);
-        return interaction.editReply({ content: `🗑 Select achievement to remove from **${robloxData.name}**`, components: [row] });
+        return interaction.editReply({ content: `🗑 Select achievement to remove from **${user.robloxUsername}** (<@${targetMember.id}>)`, components: [row] });
     }
 }
